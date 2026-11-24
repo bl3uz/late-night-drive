@@ -147,7 +147,7 @@
 </style>
 </head>
 <body>
-<canvas id="screen" width="480" height="270" aria-label="Pixel art view from inside a car driving on a rainy Japanese street"></canvas>
+<canvas id="screen" width="480" height="270" aria-label="Pixel art view from inside a car driving on a left-hand rainy street"></canvas>
 
 <div id="hud" aria-label="Radio and wiper controls">
   <div class="tabs">
@@ -175,6 +175,7 @@
       <button class="btn segbtn active" data-mode="1">Slow</button>
       <button class="btn segbtn" data-mode="2">Fast</button>
     </div>
+    <button id="beamBtn" class="btn icon" title="Toggle High Beams (H)">BEAMS</button>
     <label class="vol">Rain <input id="rainVol" type="range" min="0" max="100" value="55" aria-label="Rain volume"></label>
     <label class="vol">Music <input id="musicVol" type="range" min="0" max="100" value="55" aria-label="Music volume"></label>
     <span class="badge" id="badge">MP3</span>
@@ -184,10 +185,11 @@
 
 <div id="intro">
   <div class="terminal-box">
-    <div class="boot-log" id="bootLog">INITIALIZING TOKYO_DRIVE_KERNEL v2.0...</div>
+    <div class="boot-log" id="bootLog">INITIALIZING INDONESIA/TOKYO_DRIVE v2.5...</div>
     <div class="card-action">
-      <div class="eyebrow">16-BIT &middot; TOKYO RAIN &middot; CYBERPUNK</div>
+      <div class="eyebrow">16-BIT &middot; LEFT-HAND TRAFFIC &middot; TUNNELS</div>
       <h1>Rainy Night Drive</h1>
+      <!-- Explicitly added ID back to hook up JS event listener -->
       <button id="startBtn" class="start">&#9654; IGNITE ENGINE</button>
     </div>
   </div>
@@ -197,10 +199,9 @@
 /* Boot sequence */
 const bootLogs = [
   "> CPU: NEON-16 12MHz Processor OK",
-  "> MEMORY: 64KB RAM Verified",
-  "> LOADING TOKYO STREET ASSETS & NEON SIGNS ... [OK]",
-  "> SYNCHRONIZING WIPER ACTUATORS ... [OK]",
-  "> ENHANCING ATMOSPHERIC RAIN SYNTHESIZER ... [OK]",
+  "> LEFT-HAND TRAFFIC SYSTEM [ID/JP RULE] LOADED",
+  "> TUNNEL ACOUSTICS & REVERB MODULES ... [OK]",
+  "> HIGH-BEAM HEADLIGHT MATRIX ... [ARMED]",
   "> ESTABLISHING DASHBOARD AMBIENCE ... [READY]"
 ];
 let logIndex = 0;
@@ -237,6 +238,9 @@ const S = {
   wiperMode: 1,
   rain: 0.55,
   music: 0.55,
+  highBeams: false,
+  tunnelTimer: 0,
+  inTunnel: false,
   speedKmh: 84
 };
 
@@ -404,8 +408,8 @@ function seedScene() {
   for (let i = 0; i < 7; i++) lights.push({ side: i % 2 === 0 ? -1 : 1, z: 2.4 + i * 26, seed: rand(0, 6.28) });
   
   cars = [
-    { z: 12, lane: 0.32, speed: 28, type: 'oncoming' },
-    { z: 25, lane: -0.25, speed: 10, type: 'same' }
+    { z: 14, lane: -0.35, speed: 28, type: 'oncoming' },
+    { z: 22, lane: 0.22,  speed: 12, type: 'same'     }
   ];
 
   puddleGlints = [];
@@ -452,16 +456,28 @@ function update(dt) {
   S.t += dt; S.scroll += S.speed * dt;
   S.speedKmh = 82 + Math.sin(S.t * 0.23) * 6 + Math.sin(S.t * 1.7) * 1.2;
 
+  S.tunnelTimer += dt;
+  if (!S.inTunnel && S.tunnelTimer > 42) {
+    S.inTunnel = true;
+    S.tunnelTimer = 0;
+  } else if (S.inTunnel && S.tunnelTimer > 14) {
+    S.inTunnel = false;
+    S.tunnelTimer = 0;
+  }
+  AudioEngine.setTunnel(S.inTunnel);
+
   for (const l of lights) { l.z -= S.speed * dt; if (l.z < 1.5) l.z += 26 * 7; }
 
   for (const c of cars) {
     if (c.type === 'oncoming') {
       c.z -= (S.speed + c.speed) * dt;
-      if (c.z < 1.8) { c.z = 35; c.lane = rand(0.2, 0.5); }
+      if (c.z < 1.8) { c.z = 38; c.lane = rand(0.15, 0.45); }
     } else {
       c.z -= (S.speed - c.speed) * dt;
-      if (c.z < 1.8) { c.z = 40; c.lane = rand(-0.5, -0.1); }
-      else if (c.z > 50) c.z = 15;
+      if (c.z < 1.8) { 
+        c.z = 42; 
+        c.lane = rand(-0.45, -0.15);
+      } else if (c.z > 50) c.z = 15;
     }
   }
 
@@ -511,6 +527,10 @@ function updateWipers(dt) {
 }
 
 function drawSky() {
+  if (S.inTunnel) {
+    rect(0, 0, W, L.horizon + 2, '#030508');
+    return;
+  }
   const g = ctx.createLinearGradient(0, L.wTop - 4, 0, L.horizon);
   g.addColorStop(0, '#05070f'); g.addColorStop(0.5, '#0a1020'); g.addColorStop(1, '#1a2537');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, L.horizon + 2);
@@ -528,6 +548,17 @@ function drawSky() {
 }
 
 function drawJapaneseCityscape() {
+  if (S.inTunnel) {
+    ctx.fillStyle = '#10141c';
+    ctx.fillRect(0, 0, W, L.horizon);
+    ctx.fillStyle = '#1d2633';
+    for (let i = 0; i < W; i += 40) {
+      let xPos = (i - (S.scroll * 0.5) % 40);
+      ctx.fillRect(Math.round(xPos), 0, 4, L.horizon);
+    }
+    return;
+  }
+
   for (const b of japaneseBuildings) {
     b.x -= S.speed * 0.04;
     if (b.x + b.w < -10) {
@@ -565,26 +596,38 @@ function project(z) { const p = 1.6 / z; return { p, y: L.horizon + (L.yB - L.ho
 
 function drawRoad() {
   const yH = L.horizon, yB = L.yB, cx = L.cx, hwN = W * 0.8;
-  rect(0, yH, W, H - yH, '#06090d');
+  rect(0, yH, W, H - yH, S.inTunnel ? '#0d1117' : '#06090d');
   ctx.beginPath(); ctx.moveTo(cx - 2, yH); ctx.lineTo(cx + 2, yH); ctx.lineTo(cx + hwN, yB + 20); ctx.lineTo(cx - hwN, yB + 20); ctx.closePath();
-  const rg = ctx.createLinearGradient(0, yH, 0, yB); rg.addColorStop(0, '#121a26'); rg.addColorStop(0.2, '#0c121a'); rg.addColorStop(1, '#080b10');
+  const rg = ctx.createLinearGradient(0, yH, 0, yB); 
+  if (S.inTunnel) {
+    rg.addColorStop(0, '#1c2430'); rg.addColorStop(1, '#080c10');
+  } else {
+    rg.addColorStop(0, '#121a26'); rg.addColorStop(0.2, '#0c121a'); rg.addColorStop(1, '#080b10');
+  }
   ctx.fillStyle = rg; ctx.fill();
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const sh = ctx.createLinearGradient(0, yH, 0, yH + (yB - yH) * 0.5); sh.addColorStop(0, 'rgba(95,130,175,0.12)'); sh.addColorStop(1, 'rgba(95,130,175,0)');
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const sh = ctx.createLinearGradient(0, yH, 0, yH + (yB - yH) * 0.5); 
+  sh.addColorStop(0, S.inTunnel ? 'rgba(255,230,150,0.2)' : 'rgba(95,130,175,0.12)'); 
+  sh.addColorStop(1, 'rgba(95,130,175,0)');
   ctx.fillStyle = sh; ctx.fillRect(0, yH, W, (yB - yH) * 0.5);
-  for (const g of puddleGlints) {
-    if (g.z < 1.7) continue; const pr = project(g.z); if (pr.y > L.wBottom) continue;
-    const flick = 0.55 + 0.45 * Math.sin(S.t * 1.6 + g.seed), x = cx + g.lane * pr.hw;
-    ctx.fillStyle = 'rgba(170,205,240,' + (g.a * flick) + ')'; ctx.fillRect(Math.round(x), Math.round(pr.y), Math.max(1, Math.round(pr.p * 5)), 1);
+
+  if (!S.inTunnel) {
+    for (const g of puddleGlints) {
+      if (g.z < 1.7) continue; const pr = project(g.z); if (pr.y > L.wBottom) continue;
+      const flick = 0.55 + 0.45 * Math.sin(S.t * 1.6 + g.seed), x = cx + g.lane * pr.hw;
+      ctx.fillStyle = 'rgba(170,205,240,' + (g.a * flick) + ')'; ctx.fillRect(Math.round(x), Math.round(pr.y), Math.max(1, Math.round(pr.p * 5)), 1);
+    }
   }
   ctx.restore();
+
   ctx.strokeStyle = 'rgba(175,195,215,0.13)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(cx - 3, yH); ctx.lineTo(cx - hwN * 0.995, yB + 14); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx + 3, yH); ctx.lineTo(cx + hwN * 0.995, yB + 14); ctx.stroke();
-  drawLaneDashes(yH, yB, cx, hwN, 0); drawReflectors(yH, yB, cx, hwN);
-  const hg = ctx.createLinearGradient(0, L.horizon - 10, 0, L.horizon + 16);
-  hg.addColorStop(0, 'rgba(120,150,190,0)'); hg.addColorStop(0.55, 'rgba(120,150,190,0.12)'); hg.addColorStop(1, 'rgba(120,150,190,0)');
-  ctx.fillStyle = hg; ctx.fillRect(0, L.horizon - 10, W, 26);
+  
+  drawLaneDashes(yH, yB, cx, hwN, 0); 
+  if (!S.inTunnel) drawReflectors(yH, yB, cx, hwN);
 }
 
 function drawLaneDashes(yH, yB, cx, hwN, laneOffset) {
@@ -610,6 +653,20 @@ function drawReflectors(yH, yB, cx, hwN) {
 }
 
 function drawStreetlights() {
+  if (S.inTunnel) {
+    for (const l of lights) {
+      if (l.z < 1.55 || l.z > 80) continue;
+      const pr = project(l.z); const p = pr.p; if (p < 0.02) continue;
+      const lx = L.cx; const ly = pr.y - H * 0.6 * p;
+      ctx.fillStyle = '#fffae0';
+      ctx.fillRect(Math.round(lx - 6), Math.round(ly), 12, 2);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      radial(lx, ly + 2, Math.max(10, 50 * p), '255,240,180', 0.6);
+      ctx.restore();
+    }
+    return;
+  }
+
   for (const l of lights) {
     if (l.z < 1.55 || l.z > 90) continue; const pr = project(l.z); const p = pr.p; if (p < 0.018) continue;
     const x = L.cx + l.side * pr.hw * 1.34; if (x < -70 || x > W + 70) continue;
@@ -665,6 +722,7 @@ function drawTraffic() {
 }
 
 function drawRainFall() {
+  if (S.inTunnel) return;
   ctx.lineWidth = 1;
   for (const r of rainFar) {
     if (r.y < L.wTop - 6 || r.y > L.wBottom + 4) continue;
@@ -677,10 +735,12 @@ function drawRainFall() {
 }
 
 function drawStreaks() {
+  if (S.inTunnel) return;
   for (const s of streaks) { ctx.fillStyle = 'rgba(175,205,235,' + s.a + ')'; ctx.fillRect(Math.round(s.x), Math.round(Math.max(L.wTop, s.y - s.len)), 1, Math.round(s.len)); }
 }
 
 function drawGlassDrops() {
+  if (S.inTunnel) return;
   for (const d of drops) {
     const x = Math.round(d.x), y = Math.round(d.y);
     if (d.trail > 2) {
@@ -701,7 +761,7 @@ function drawGlassHaze() {
 function drawWipers() {
   for (const w of wipers) {
     const cos = Math.cos(w.angle), sin = Math.sin(w.angle), tipx = w.px + cos * w.len, tipy = w.py - sin * w.len;
-    if (S.wiperMode > 0) {
+    if (S.wiperMode > 0 && !S.inTunnel) {
       const delta = Math.abs(w.angle - w.prevAngle);
       if (delta > 0.001 && delta < 0.3) {
         ctx.beginPath(); ctx.moveTo(w.px, w.py); ctx.arc(w.px, w.py, w.len, -w.prevAngle, -w.angle, w.angle > w.prevAngle); ctx.closePath();
@@ -753,6 +813,18 @@ function drawScene() {
   drawRoad(); drawStreetlights(); drawTraffic();
   drawStreaks(); drawRainFall(); drawGlassDrops(); drawWipers(); drawGlassHaze();
   ctx.restore();
+
+  if (S.highBeams) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const hb = ctx.createRadialGradient(W * 0.5, L.horizon + 30, 10, W * 0.5, L.yB, W * 0.7);
+    hb.addColorStop(0, 'rgba(255,255,240,0.30)');
+    hb.addColorStop(0.5, 'rgba(255,245,210,0.12)');
+    hb.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hb;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
 }
 
 function draw() {
@@ -770,9 +842,9 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-/* ============================ Enhanced Heavy Rain Audio ============================ */
+/* ============================ audio with tunnel acoustics ============================ */
 const AudioEngine = (function () {
-  let ctx = null, master = null, rainBus = null, sfxBus = null;
+  let ctx = null, master = null, rainBus = null, sfxBus = null, tunnelFilter = null;
   let whiteBuf = null, pinkBuf = null, shortBuf = null, scrapeGain = null, started = false;
 
   function noise(seconds, pink) {
@@ -801,27 +873,29 @@ const AudioEngine = (function () {
     try { ctx = new AC(); } catch (e) { return false; }
     
     master = ctx.createGain(); master.gain.value = 0.85; master.connect(ctx.destination);
-    rainBus = ctx.createGain(); rainBus.gain.value = 0.85; rainBus.connect(master); // Boosted base rain volume
-    sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
+    
+    tunnelFilter = ctx.createBiquadFilter();
+    tunnelFilter.type = 'lowpass';
+    tunnelFilter.frequency.value = 22000;
+    tunnelFilter.connect(master);
+
+    rainBus = ctx.createGain(); rainBus.gain.value = 0.85; rainBus.connect(tunnelFilter);
+    sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(tunnelFilter);
     
     whiteBuf = noise(4, false); pinkBuf = noise(4.5, true); shortBuf = noise(0.35, false);
 
-    // Layer 1: Deep rolling heavy rain / roof rumble
     const s1 = ctx.createBufferSource(); s1.buffer = pinkBuf; s1.loop = true; s1.start();
     const lp1 = ctx.createBiquadFilter(); lp1.frequency.value = 320; s1.connect(lp1).connect(rainBus);
 
-    // Layer 2: Mid-range downpour wash / window pelting hiss
     const s2 = ctx.createBufferSource(); s2.buffer = whiteBuf; s2.loop = true; s2.start();
     const bp2 = ctx.createBiquadFilter(); bp2.type = 'bandpass'; bp2.frequency.value = 1400; bp2.Q.value = 0.6;
     s2.connect(bp2).connect(rainBus);
 
-    // Layer 3: High-frequency crisp droplet patter on glass
     const s3 = ctx.createBufferSource(); s3.buffer = whiteBuf; s3.loop = true; s3.playbackRate.value = 0.8; s3.start();
     const hp3 = ctx.createBiquadFilter(); hp3.type = 'highpass'; hp3.frequency.value = 4200;
     const g3 = ctx.createGain(); g3.gain.value = 0.45;
     s3.connect(hp3).connect(g3).connect(rainBus);
 
-    // Wiper blade rubber scrape track
     const s4 = ctx.createBufferSource(); s4.buffer = whiteBuf; s4.loop = true; s4.start();
     const bpw = ctx.createBiquadFilter(); bpw.type = 'bandpass'; bpw.frequency.value = 950; bpw.Q.value = 0.9;
     scrapeGain = ctx.createGain(); scrapeGain.gain.value = 0;
@@ -840,13 +914,19 @@ const AudioEngine = (function () {
       const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.26 * s, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
       o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.27);
     },
+    setTunnel(inTunnel) {
+      if (!started || !ctx || !tunnelFilter) return;
+      const t = ctx.currentTime;
+      tunnelFilter.frequency.setTargetAtTime(inTunnel ? 750 : 22000, t, 0.4);
+      rainBus.gain.setTargetAtTime(inTunnel ? 0.35 : 0.85, t, 0.4);
+    },
     setScrape(v) { if (started && scrapeGain) scrapeGain.gain.setTargetAtTime(clamp(v, 0, 1) * 0.06, ctx.currentTime, 0.06); },
     setRain(v) { if (started && rainBus) rainBus.gain.setTargetAtTime(Math.pow(clamp(v, 0, 1), 1.25) * 1.15, ctx.currentTime, 0.18); },
     resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
   };
 })();
 
-/* ============================ UI & Tab Switching ============================ */
+/* ============================ UI & Controls ============================ */
 const wiperButtons = Array.from(document.querySelectorAll('.segbtn'));
 
 function setWiperMode(mode) {
@@ -860,6 +940,13 @@ function setWiperMode(mode) {
 
 wiperButtons.forEach(b => b.addEventListener('click', () => setWiperMode(Number(b.dataset.mode))));
 setWiperMode(1);
+
+const beamBtn = document.getElementById('beamBtn');
+function toggleHighBeams() {
+  S.highBeams = !S.highBeams;
+  beamBtn.classList.toggle('active', S.highBeams);
+}
+beamBtn.addEventListener('click', toggleHighBeams);
 
 document.getElementById('rainVol').addEventListener('input', e => {
   S.rain = Number(e.target.value) / 100;
@@ -881,7 +968,6 @@ tabSpotify.addEventListener('click', () => {
   viewSpotify.hidden = false; viewLocal.hidden = true;
 });
 
-/* Local Player Integration logic */
 let localAudio = new Audio();
 let trackIndex = 0;
 let currentList = [];
@@ -933,9 +1019,9 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'n' || e.key === 'N') playLocalTrack(trackIndex + 1);
   else if (e.key === 'p' || e.key === 'P') playLocalTrack(trackIndex - 1);
   else if (e.key === 'w' || e.key === 'W') setWiperMode((S.wiperMode + 1) % 3);
+  else if (e.key === 'h' || e.key === 'H') toggleHighBeams();
 });
 
-/* Engine Ignition Trigger (Fixed) */
 function startEverything() {
   if (document.body.classList.contains('started')) return;
   document.body.classList.add('started');
