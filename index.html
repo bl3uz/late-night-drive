@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#05070b" />
-<title>Rainy Night Drive — Tokyo 16-bit</title>
+<title>Rainy Night Drive — Dynamic RHD 16-bit</title>
 <style>
   :root{
     --amber:#ffb457;
@@ -147,7 +147,7 @@
 </style>
 </head>
 <body>
-<canvas id="screen" width="480" height="270" aria-label="Pixel art view from inside a car driving on a left-hand rainy street"></canvas>
+<canvas id="screen" width="480" height="270" aria-label="Pixel art view from inside a dynamic right-hand drive car driving on a rainy street"></canvas>
 
 <div id="hud" aria-label="Radio and wiper controls">
   <div class="tabs">
@@ -185,11 +185,10 @@
 
 <div id="intro">
   <div class="terminal-box">
-    <div class="boot-log" id="bootLog">INITIALIZING INDONESIA/TOKYO_DRIVE v2.5...</div>
+    <div class="boot-log" id="bootLog">INITIALIZING DYNAMIC_DRIVE KERNEL v3.5...</div>
     <div class="card-action">
-      <div class="eyebrow">16-BIT &middot; LEFT-HAND TRAFFIC &middot; TUNNELS</div>
+      <div class="eyebrow">16-BIT &middot; ACTIVE MOTION &middot; RHD</div>
       <h1>Rainy Night Drive</h1>
-      <!-- Explicitly added ID back to hook up JS event listener -->
       <button id="startBtn" class="start">&#9654; IGNITE ENGINE</button>
     </div>
   </div>
@@ -199,10 +198,10 @@
 /* Boot sequence */
 const bootLogs = [
   "> CPU: NEON-16 12MHz Processor OK",
-  "> LEFT-HAND TRAFFIC SYSTEM [ID/JP RULE] LOADED",
-  "> TUNNEL ACOUSTICS & REVERB MODULES ... [OK]",
+  "> DYNAMIC CAMERA MOTION & STEERING TILT ... [ACTIVE]",
+  "> RIGHT-HAND DRIVE [RHD] DYNAMIC COCKPIT ... [ONLINE]",
   "> HIGH-BEAM HEADLIGHT MATRIX ... [ARMED]",
-  "> ESTABLISHING DASHBOARD AMBIENCE ... [READY]"
+  "> ESTABLISHING ROAD DYNAMICS ... [READY]"
 ];
 let logIndex = 0;
 const logContainer = document.getElementById('bootLog');
@@ -235,6 +234,8 @@ const S = {
   t: 0,
   scroll: 0,
   speed: 16,
+  playerX: 0,        // Player steering shift offset
+  steerInput: 0,     // Target steering direction
   wiperMode: 1,
   rain: 0.55,
   music: 0.55,
@@ -408,8 +409,8 @@ function seedScene() {
   for (let i = 0; i < 7; i++) lights.push({ side: i % 2 === 0 ? -1 : 1, z: 2.4 + i * 26, seed: rand(0, 6.28) });
   
   cars = [
-    { z: 14, lane: -0.35, speed: 28, type: 'oncoming' },
-    { z: 22, lane: 0.22,  speed: 12, type: 'same'     }
+    { z: 14, lane: 0.35, speed: 28, type: 'oncoming' },
+    { z: 22, lane: -0.22, speed: 12, type: 'same'     }
   ];
 
   puddleGlints = [];
@@ -453,7 +454,13 @@ let wiperPhase = 0;
 let scrapeLevel = 0;
 
 function update(dt) {
-  S.t += dt; S.scroll += S.speed * dt;
+  S.t += dt; 
+  S.scroll += S.speed * dt;
+  
+  // Smoothly interpolate player steering position based on arrow keys / A & D
+  S.playerX += (S.steerInput - S.playerX) * Math.min(1, dt * 7);
+  S.playerX = clamp(S.playerX, -0.7, 0.7);
+
   S.speedKmh = 82 + Math.sin(S.t * 0.23) * 6 + Math.sin(S.t * 1.7) * 1.2;
 
   S.tunnelTimer += dt;
@@ -481,12 +488,13 @@ function update(dt) {
     }
   }
 
-  for (const r of rainFar) { r.y += r.v * dt; r.x += r.v * 0.16 * dt; if (r.y > H + 6) { r.y = -8; r.x = rand(-20, W + 10); } if (r.x > W + 6) r.x = -8; }
-  for (const r of rainNear) { r.y += r.v * dt; r.x += r.v * 0.17 * dt; if (r.y > H + 12) { r.y = -14; r.x = rand(-30, W + 10); } if (r.x > W + 12) r.x = -12; }
+  for (const r of rainFar) { r.y += r.v * dt; r.x += (r.v * 0.16 - S.playerX * 15) * dt; if (r.y > H + 6) { r.y = -8; r.x = rand(-20, W + 10); } if (r.x > W + 6) r.x = -8; }
+  for (const r of rainNear) { r.y += r.v * dt; r.x += (r.v * 0.17 - S.playerX * 25) * dt; if (r.y > H + 12) { r.y = -14; r.x = rand(-30, W + 10); } if (r.x > W + 12) r.x = -12; }
   for (const s of streaks) { s.y += s.spd * dt; if (s.y > L.wBottom) { s.y = L.wTop; s.x = rand(0, W); } }
   for (let i = 0; i < drops.length; i++) {
     const d = drops[i]; d.slip += dt; d.y += d.v * dt * (0.7 + Math.sin(d.slip * 1.3 + d.wob) * 0.35);
-    d.x += Math.sin(S.t * 1.7 + d.wob) * dt * 1.6; d.trail = Math.min(26, d.trail + d.v * dt * 1.6 + dt * 2);
+    d.x += (Math.sin(S.t * 1.7 + d.wob) * 1.6 - S.playerX * 6) * dt; 
+    d.trail = Math.min(26, d.trail + d.v * dt * 1.6 + dt * 2);
     if (d.y > L.wBottom - 3 || d.x < L.pad + 6 || d.x > W - L.pad - 6) resetDrop(d, true);
   }
   updateWipers(dt);
@@ -535,15 +543,15 @@ function drawSky() {
   g.addColorStop(0, '#05070f'); g.addColorStop(0.5, '#0a1020'); g.addColorStop(1, '#1a2537');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, L.horizon + 2);
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  radial(W * 0.58, L.horizon - 4, W * 0.46, '120,95,80', 0.16);
-  radial(W * 0.18, L.horizon - 8, W * 0.2, '90,110,140', 0.08);
+  radial(W * 0.58 - S.playerX * 25, L.horizon - 4, W * 0.46, '120,95,80', 0.16);
+  radial(W * 0.18 - S.playerX * 15, L.horizon - 8, W * 0.2, '90,110,140', 0.08);
   ctx.restore();
   for (const c of clouds) {
-    c.x += c.spd * 0.016; if (c.x > W + 80) c.x = -c.w - 40;
+    c.x += (c.spd - S.playerX * 0.5) * 0.016; 
+    if (c.x > W + 80) c.x = -c.w - 40;
+    if (c.x < -c.w - 40) c.x = W + 40;
     ctx.fillStyle = 'rgba(38,50,72,' + c.a + ')';
     ctx.fillRect(Math.round(c.x), Math.round(c.y), Math.round(c.w), Math.round(c.h * 0.55));
-    ctx.fillRect(Math.round(c.x + c.w * 0.12), Math.round(c.y - c.h * 0.35), Math.round(c.w * 0.7), Math.round(c.h * 0.5));
-    ctx.fillRect(Math.round(c.x + c.w * 0.34), Math.round(c.y - c.h * 0.65), Math.round(c.w * 0.38), Math.round(c.h * 0.4));
   }
 }
 
@@ -553,24 +561,23 @@ function drawJapaneseCityscape() {
     ctx.fillRect(0, 0, W, L.horizon);
     ctx.fillStyle = '#1d2633';
     for (let i = 0; i < W; i += 40) {
-      let xPos = (i - (S.scroll * 0.5) % 40);
+      let xPos = (i - (S.scroll * 0.5 + S.playerX * 30) % 40);
       ctx.fillRect(Math.round(xPos), 0, 4, L.horizon);
     }
     return;
   }
 
   for (const b of japaneseBuildings) {
-    b.x -= S.speed * 0.04;
-    if (b.x + b.w < -10) {
-      b.x = W + randi(10, 40);
-    }
+    b.x -= (S.speed * 0.04 + S.playerX * 0.2);
+    if (b.x + b.w < -10) b.x = W + randi(10, 40);
+    if (b.x > W + 50) b.x = -30;
+
     const top = L.horizon - b.h;
     ctx.fillStyle = b.col;
     ctx.fillRect(Math.round(b.x), Math.round(top), b.w, b.h + 5);
 
     ctx.fillStyle = '#0f1722';
     ctx.fillRect(Math.round(b.x - 2), Math.round(top), b.w + 4, 3);
-    ctx.fillRect(Math.round(b.x - 1), Math.round(top + b.h * 0.4), b.w + 2, 2);
 
     for (const s of b.signs) {
       const sx = s.side === 'left' ? b.x + 2 : b.x + b.w - 6;
@@ -588,16 +595,30 @@ function drawJapaneseCityscape() {
   ctx.fillStyle = '#070c12';
   for (let x = -8; x < W + 8; x += 5) {
     const h = 3 + Math.round(Math.abs(Math.sin(x * 0.37)) * 6);
-    ctx.fillRect(x, L.horizon - h + 2, 5, h);
+    ctx.fillRect(Math.round(x - S.playerX * 10), L.horizon - h + 2, 5, h);
   }
 }
 
-function project(z) { const p = 1.6 / z; return { p, y: L.horizon + (L.yB - L.horizon) * p, hw: W * 0.8 * p }; }
+function project(z) { 
+  const p = 1.6 / z; 
+  return {
+    p,
+    y: L.horizon + (L.yB - L.horizon) * p,
+    hw: W * 0.8 * p
+  }; 
+}
 
 function drawRoad() {
-  const yH = L.horizon, yB = L.yB, cx = L.cx, hwN = W * 0.8;
+  const yH = L.horizon, yB = L.yB, cx = L.cx - S.playerX * 45, hwN = W * 0.8;
   rect(0, yH, W, H - yH, S.inTunnel ? '#0d1117' : '#06090d');
-  ctx.beginPath(); ctx.moveTo(cx - 2, yH); ctx.lineTo(cx + 2, yH); ctx.lineTo(cx + hwN, yB + 20); ctx.lineTo(cx - hwN, yB + 20); ctx.closePath();
+  
+  ctx.beginPath(); 
+  ctx.moveTo(cx - 2, yH); 
+  ctx.lineTo(cx + 2, yH); 
+  ctx.lineTo(cx + hwN, yB + 20); 
+  ctx.lineTo(cx - hwN, yB + 20); 
+  ctx.closePath();
+  
   const rg = ctx.createLinearGradient(0, yH, 0, yB); 
   if (S.inTunnel) {
     rg.addColorStop(0, '#1c2430'); rg.addColorStop(1, '#080c10');
@@ -653,11 +674,12 @@ function drawReflectors(yH, yB, cx, hwN) {
 }
 
 function drawStreetlights() {
+  const cx = L.cx - S.playerX * 45;
   if (S.inTunnel) {
     for (const l of lights) {
       if (l.z < 1.55 || l.z > 80) continue;
       const pr = project(l.z); const p = pr.p; if (p < 0.02) continue;
-      const lx = L.cx; const ly = pr.y - H * 0.6 * p;
+      const lx = cx; const ly = pr.y - H * 0.6 * p;
       ctx.fillStyle = '#fffae0';
       ctx.fillRect(Math.round(lx - 6), Math.round(ly), 12, 2);
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -669,7 +691,7 @@ function drawStreetlights() {
 
   for (const l of lights) {
     if (l.z < 1.55 || l.z > 90) continue; const pr = project(l.z); const p = pr.p; if (p < 0.018) continue;
-    const x = L.cx + l.side * pr.hw * 1.34; if (x < -70 || x > W + 70) continue;
+    const x = cx + l.side * pr.hw * 1.34; if (x < -70 || x > W + 70) continue;
     const topY = pr.y - H * 0.7 * p, pw = Math.max(1, Math.round(3.6 * p));
     ctx.fillStyle = '#080d12'; ctx.fillRect(Math.round(x - pw / 2), Math.round(topY), pw, Math.round(H * 0.7 * p));
     const lx = x - l.side * Math.max(3, 46 * p), ly = topY + Math.max(1, Math.round(2 * p));
@@ -681,11 +703,12 @@ function drawStreetlights() {
 }
 
 function drawTraffic() {
+  const cx = L.cx - S.playerX * 45;
   for (const c of cars) {
     if (c.z < 1.4 || c.z > 45) continue;
     const pr = project(c.z);
     const p = pr.p;
-    const x = L.cx + c.lane * pr.hw;
+    const x = cx + c.lane * pr.hw;
     const y = pr.y;
     if (y > L.wBottom + 10) continue;
 
@@ -776,6 +799,7 @@ function drawWipers() {
   }
 }
 
+/* ============================ RHD Cabin Perspective ============================ */
 function drawDashboard() {
   const d = L.dashTop;
   ctx.beginPath(); ctx.moveTo(-2, H + 2); ctx.lineTo(-2, d + 17);
@@ -786,22 +810,59 @@ function drawDashboard() {
   ctx.fillStyle = g; ctx.fill();
 }
 
-function drawCluster() {
-  const cy = Math.round(H * 0.785), cx1 = Math.round(W * 0.185);
+function drawClusterRHD() {
+  const cy = Math.round(H * 0.785);
+  const cx1 = Math.round(W * 0.735);
   ctx.fillStyle = '#06090c';
-  ctx.beginPath(); ctx.ellipse(W * 0.25, cy + Math.round(H * 0.02), W * 0.20, H * 0.13, 0, Math.PI, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(W * 0.68, cy + Math.round(H * 0.02), W * 0.20, H * 0.13, 0, Math.PI, Math.PI * 2); ctx.fill();
   pixCircle(cx1, cy, Math.round(H * 0.072), '#121a21');
   const sp = String(Math.round(S.speedKmh)).padStart(3, ' ');
   pixText(sp, cx1 - 5, cy + Math.round(H * 0.035), 1, 'rgba(255,180,100,0.75)');
 }
 
-function drawWheel() {
-  const cx = W * 0.225, cy = H * 1.035, rx = W * 0.185, ry = H * 0.245, thick = Math.max(8, Math.round(H * 0.042));
+function drawWheelRHD() {
+  const cx = W * 0.765 - S.playerX * 10; // Steering wheel shifts slightly with steering input
+  const cy = H * 1.035;
+  const rx = W * 0.185;
+  const ry = H * 0.245;
+  const thick = Math.max(8, Math.round(H * 0.042));
+
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(cx + 5, cy + 4, rx + thick * 0.4, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+
   ellipseRing(cx, cy, rx, ry, thick, '#0b0e13');
+
+  ctx.strokeStyle = 'rgba(150,175,200,0.30)';
+  ctx.lineWidth = Math.max(1, Math.round(H * 0.008));
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx - thick * 0.5, ry - thick * 0.5, 0, rad(196), rad(300));
+  ctx.stroke();
+
+  const spoke = (a, wid) => {
+    const x1 = cx + Math.cos(a) * (rx - thick * 0.2);
+    const y1 = cy + Math.sin(a) * (ry - thick * 0.2);
+    const x2 = cx + Math.cos(a + 0.16) * (rx * 0.16);
+    const y2 = cy + Math.sin(a + 0.16) * (ry * 0.16);
+    ctx.beginPath();
+    ctx.moveTo(x1 - wid, y1); ctx.lineTo(x1 + wid, y1);
+    ctx.lineTo(x2 + wid * 2.2, y2); ctx.lineTo(x2 - wid * 2.2, y2);
+    ctx.closePath();
+    ctx.fillStyle = '#0a0d12'; ctx.fill();
+  };
+  spoke(rad(205), Math.round(thick * 0.55));
+  spoke(rad(335), Math.round(thick * 0.55));
+  spoke(rad(90), Math.round(thick * 0.5));
+
+  pixCircle(cx, cy, Math.round(H * 0.055), '#0a0e13');
+  pixCircle(cx, cy, Math.round(H * 0.045), '#121922');
 }
 
 function drawCabin() {
-  drawDashboard(); drawCluster(); drawWheel();
+  drawDashboard(); 
+  drawClusterRHD(); 
+  drawWheelRHD();
   poly([[0, -2], [L.pad + 14, L.wTop - 2], [L.pad - 2, L.wBottom + 4], [0, H + 2]], '#070a0d');
   poly([[W, -2], [W - L.pad - 14, L.wTop - 2], [W - L.pad + 2, L.wBottom + 4], [W, H + 2]], '#070a0d');
 }
@@ -817,7 +878,7 @@ function drawScene() {
   if (S.highBeams) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const hb = ctx.createRadialGradient(W * 0.5, L.horizon + 30, 10, W * 0.5, L.yB, W * 0.7);
+    const hb = ctx.createRadialGradient(W * 0.5 - S.playerX * 30, L.horizon + 30, 10, W * 0.5, L.yB, W * 0.7);
     hb.addColorStop(0, 'rgba(255,255,240,0.30)');
     hb.addColorStop(0.5, 'rgba(255,245,210,0.12)');
     hb.addColorStop(1, 'rgba(255,255,255,0)');
@@ -829,7 +890,9 @@ function drawScene() {
 
 function draw() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  const jx = Math.sin(S.t * 6.7) + Math.sin(S.t * 3.1), jy = Math.sin(S.t * 5.3) + Math.cos(S.t * 2.3);
+  // Add subtle engine vibration shake to camera
+  const jx = Math.sin(S.t * 6.7) + Math.sin(S.t * 3.1) - S.playerX * 2;
+  const jy = Math.sin(S.t * 5.3) + Math.cos(S.t * 2.3);
   ctx.save(); ctx.translate(jx > 1.4 ? 1 : jx < -1.4 ? -1 : 0, jy > 1.5 ? 1 : jy < -1.5 ? -1 : 0);
   drawScene(); drawCabin(); ctx.restore();
 }
@@ -842,7 +905,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-/* ============================ audio with tunnel acoustics ============================ */
+/* ============================ audio engine ============================ */
 const AudioEngine = (function () {
   let ctx = null, master = null, rainBus = null, sfxBus = null, tunnelFilter = null;
   let whiteBuf = null, pinkBuf = null, shortBuf = null, scrapeGain = null, started = false;
@@ -879,7 +942,7 @@ const AudioEngine = (function () {
     tunnelFilter.frequency.value = 22000;
     tunnelFilter.connect(master);
 
-    rainBus = ctx.createGain(); rainBus.gain.value = 0.85; rainBus.connect(tunnelFilter);
+    rainBus = ctx.createGain(); rainBus.gain.value = 0.55; rainBus.connect(tunnelFilter);
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(tunnelFilter);
     
     whiteBuf = noise(4, false); pinkBuf = noise(4.5, true); shortBuf = noise(0.35, false);
@@ -918,7 +981,7 @@ const AudioEngine = (function () {
       if (!started || !ctx || !tunnelFilter) return;
       const t = ctx.currentTime;
       tunnelFilter.frequency.setTargetAtTime(inTunnel ? 750 : 22000, t, 0.4);
-      rainBus.gain.setTargetAtTime(inTunnel ? 0.35 : 0.85, t, 0.4);
+      rainBus.gain.setTargetAtTime(inTunnel ? 0.2 : S.rain, t, 0.4);
     },
     setScrape(v) { if (started && scrapeGain) scrapeGain.gain.setTargetAtTime(clamp(v, 0, 1) * 0.06, ctx.currentTime, 0.06); },
     setRain(v) { if (started && rainBus) rainBus.gain.setTargetAtTime(Math.pow(clamp(v, 0, 1), 1.25) * 1.15, ctx.currentTime, 0.18); },
@@ -992,6 +1055,7 @@ function playLocalTrack(idx) {
   trackIndex = (idx + currentList.length) % currentList.length;
   const tr = currentList[trackIndex];
   localAudio.src = tr.url;
+  localAudio.volume = Number(document.getElementById('musicVol').value) / 100;
   localAudio.play().catch(() => {});
   document.getElementById('badge').textContent = 'LOCAL';
 }
@@ -1011,15 +1075,33 @@ document.getElementById('musicVol').addEventListener('input', e => {
 
 localAudio.addEventListener('ended', () => playLocalTrack(trackIndex + 1));
 
+/* Playable Steering Key Controls (Arrow keys & A/D) */
 document.addEventListener('keydown', e => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'TEXTAREA') return;
-  if (!document.body.classList.contains('started')) return;
-  if (e.code === 'Space') { e.preventDefault(); if (localAudio.paused) localAudio.play(); else localAudio.pause(); }
-  else if (e.key === 'n' || e.key === 'N') playLocalTrack(trackIndex + 1);
-  else if (e.key === 'p' || e.key === 'P') playLocalTrack(trackIndex - 1);
-  else if (e.key === 'w' || e.key === 'W') setWiperMode((S.wiperMode + 1) % 3);
-  else if (e.key === 'h' || e.key === 'H') toggleHighBeams();
+  
+  if (e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+    S.steerInput = -0.45; // Steer left across lanes
+  } else if (e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+    S.steerInput = 0.45;  // Steer right across lanes
+  } else if (e.code === 'Space') { 
+    e.preventDefault(); 
+    if (localAudio.paused) localAudio.play(); else localAudio.pause(); 
+  } else if (e.key === 'n' || e.key === 'N') {
+    playLocalTrack(trackIndex + 1);
+  } else if (e.key === 'p' || e.key === 'P') {
+    playLocalTrack(trackIndex - 1);
+  } else if (e.key === 'w' || e.key === 'W') {
+    setWiperMode((S.wiperMode + 1) % 3);
+  } else if (e.key === 'h' || e.key === 'H') {
+    toggleHighBeams();
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A' || e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+    S.steerInput = 0; // Return steering to center when keys are released
+  }
 });
 
 function startEverything() {
