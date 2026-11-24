@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#05070b" />
-<title>Rainy Night Drive — Dynamic RHD 16-bit</title>
+<title>Rainy Night Drive — 4-Lane ID Tollroad</title>
 <style>
   :root{
     --amber:#ffb457;
@@ -147,7 +147,7 @@
 </style>
 </head>
 <body>
-<canvas id="screen" width="480" height="270" aria-label="Pixel art view from inside a dynamic right-hand drive car driving on a rainy street"></canvas>
+<canvas id="screen" width="480" height="270" aria-label="Pixel art view from inside a 4-lane ID tollroad highway"></canvas>
 
 <div id="hud" aria-label="Radio and wiper controls">
   <div class="tabs">
@@ -185,9 +185,9 @@
 
 <div id="intro">
   <div class="terminal-box">
-    <div class="boot-log" id="bootLog">INITIALIZING DYNAMIC_DRIVE KERNEL v3.5...</div>
+    <div class="boot-log" id="bootLog">INITIALIZING INDONESIA 4-LANE TOLLROAD SIMULATOR...</div>
     <div class="card-action">
-      <div class="eyebrow">16-BIT &middot; ACTIVE MOTION &middot; RHD</div>
+      <div class="eyebrow">16-BIT &middot; 4-LANE DIVIDED HIGHWAY &middot; RHD</div>
       <h1>Rainy Night Drive</h1>
       <button id="startBtn" class="start">&#9654; IGNITE ENGINE</button>
     </div>
@@ -198,10 +198,10 @@
 /* Boot sequence */
 const bootLogs = [
   "> CPU: NEON-16 12MHz Processor OK",
-  "> DYNAMIC CAMERA MOTION & STEERING TILT ... [ACTIVE]",
-  "> RIGHT-HAND DRIVE [RHD] DYNAMIC COCKPIT ... [ONLINE]",
-  "> HIGH-BEAM HEADLIGHT MATRIX ... [ARMED]",
-  "> ESTABLISHING ROAD DYNAMICS ... [READY]"
+  "> 4-LANE DIVIDED HIGHWAY TOPOLOGY [ID TOLLROAD STANDARD] ... [ACTIVE]",
+  "> LEFT 2 LANES [YOUR DIRECTION] / RIGHT 2 LANES [ONCOMING] ... [MAPPED]",
+  "> DYNAMIC CAMERA MOTION & STEERING TILT ... [ONLINE]",
+  "> HIGH-BEAM HEADLIGHT MATRIX ... [ARMED]"
 ];
 let logIndex = 0;
 const logContainer = document.getElementById('bootLog');
@@ -234,8 +234,8 @@ const S = {
   t: 0,
   scroll: 0,
   speed: 16,
-  playerX: 0,        // Player steering shift offset
-  steerInput: 0,     // Target steering direction
+  playerX: -0.52,    // Natural cruising position in the far-left lane (Lane 1)
+  steerInput: -0.52, 
   wiperMode: 1,
   rain: 0.55,
   music: 0.55,
@@ -408,9 +408,15 @@ function seedScene() {
   lights = [];
   for (let i = 0; i < 7; i++) lights.push({ side: i % 2 === 0 ? -1 : 1, z: 2.4 + i * 26, seed: rand(0, 6.28) });
   
+  /* 4-Lane traffic setup:
+     - Oncoming traffic runs in the 2 right lanes (lanes +0.25 and +0.65)
+     - Civilian cars ahead run in the 2 left lanes (lanes -0.65 and -0.25)
+  */
   cars = [
-    { z: 14, lane: 0.35, speed: 28, type: 'oncoming' },
-    { z: 22, lane: -0.22, speed: 12, type: 'same'     }
+    { z: 15, lane: 0.25,  speed: 28, type: 'oncoming' }, // Right-most oncoming lane
+    { z: 30, lane: 0.65,  speed: 32, type: 'oncoming' }, // Far-right oncoming lane
+    { z: 20, lane: -0.65, speed: 12, type: 'same'     }, // Far-left lane (cruising speed)
+    { z: 35, lane: -0.25, speed: 16, type: 'same'     }  // Middle-left lane
   ];
 
   puddleGlints = [];
@@ -454,12 +460,10 @@ let wiperPhase = 0;
 let scrapeLevel = 0;
 
 function update(dt) {
-  S.t += dt; 
-  S.scroll += S.speed * dt;
+  S.t += dt; S.scroll += S.speed * dt;
   
-  // Smoothly interpolate player steering position based on arrow keys / A & D
   S.playerX += (S.steerInput - S.playerX) * Math.min(1, dt * 7);
-  S.playerX = clamp(S.playerX, -0.7, 0.7);
+  S.playerX = clamp(S.playerX, -0.75, 0.25); // Restricted bounds inside your 2 left lanes
 
   S.speedKmh = 82 + Math.sin(S.t * 0.23) * 6 + Math.sin(S.t * 1.7) * 1.2;
 
@@ -478,13 +482,13 @@ function update(dt) {
   for (const c of cars) {
     if (c.type === 'oncoming') {
       c.z -= (S.speed + c.speed) * dt;
-      if (c.z < 1.8) { c.z = 38; c.lane = rand(0.15, 0.45); }
+      if (c.z < 1.8) { c.z = 45; c.lane = rand(0.15, 0.75); }
     } else {
       c.z -= (S.speed - c.speed) * dt;
       if (c.z < 1.8) { 
-        c.z = 42; 
-        c.lane = rand(-0.45, -0.15);
-      } else if (c.z > 50) c.z = 15;
+        c.z = 45; 
+        c.lane = rand(-0.75, -0.15); // Stays in the left two lanes (-0.75 to -0.15)
+      } else if (c.z > 55) c.z = 15;
     }
   }
 
@@ -609,16 +613,10 @@ function project(z) {
 }
 
 function drawRoad() {
-  const yH = L.horizon, yB = L.yB, cx = L.cx - S.playerX * 45, hwN = W * 0.8;
+  const yH = L.horizon, yB = L.yB, cx = L.cx - S.playerX * 55, hwN = W * 0.95;
   rect(0, yH, W, H - yH, S.inTunnel ? '#0d1117' : '#06090d');
   
-  ctx.beginPath(); 
-  ctx.moveTo(cx - 2, yH); 
-  ctx.lineTo(cx + 2, yH); 
-  ctx.lineTo(cx + hwN, yB + 20); 
-  ctx.lineTo(cx - hwN, yB + 20); 
-  ctx.closePath();
-  
+  ctx.beginPath(); ctx.moveTo(cx - 2, yH); ctx.lineTo(cx + 2, yH); ctx.lineTo(cx + hwN, yB + 20); ctx.lineTo(cx - hwN, yB + 20); ctx.closePath();
   const rg = ctx.createLinearGradient(0, yH, 0, yB); 
   if (S.inTunnel) {
     rg.addColorStop(0, '#1c2430'); rg.addColorStop(1, '#080c10');
@@ -647,7 +645,11 @@ function drawRoad() {
   ctx.beginPath(); ctx.moveTo(cx - 3, yH); ctx.lineTo(cx - hwN * 0.995, yB + 14); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx + 3, yH); ctx.lineTo(cx + hwN * 0.995, yB + 14); ctx.stroke();
   
-  drawLaneDashes(yH, yB, cx, hwN, 0); 
+  // Draw 4-Lane Dividers (-0.5 for center lane, 0 for median barrier, +0.5 for oncoming lane)
+  drawLaneDashes(yH, yB, cx, hwN, -0.5);
+  drawLaneDashes(yH, yB, cx, hwN, 0.0); // Solid / dashed median divider line
+  drawLaneDashes(yH, yB, cx, hwN, 0.5);
+
   if (!S.inTunnel) drawReflectors(yH, yB, cx, hwN);
 }
 
@@ -657,10 +659,14 @@ function drawLaneDashes(yH, yB, cx, hwN, laneOffset) {
     let zA = n * P - base, zB = zA + DASH; if (zB < zN || zA > zF) continue;
     zA = Math.max(zA, zN); zB = Math.min(zB, zF);
     const pA = zN / zA, pB = zN / zB, yA = yH + (yB - yH) * pA, yB2 = yH + (yB - yH) * pB;
-    const wA = Math.max(1, Math.round(8 * pA)), wB = Math.max(1, Math.round(8 * pB));
-    ctx.fillStyle = 'rgba(225,232,240,' + clamp((1 - zB / zF) * 0.62, 0.07, 0.46) + ')';
-    ctx.beginPath(); ctx.moveTo(cx + laneOffset * hwN * pA - wA / 2, yA); ctx.lineTo(cx + laneOffset * hwN * pA + wA / 2, yA);
-    ctx.lineTo(cx + laneOffset * hwN * pB + wB / 2, yB2); ctx.lineTo(cx + laneOffset * hwN * pB - wB / 2, yB2); ctx.closePath(); ctx.fill();
+    const wA = Math.max(1, Math.round(6 * pA)), wB = Math.max(1, Math.round(6 * pB));
+    ctx.fillStyle = laneOffset === 0.0 ? 'rgba(255,80,60,0.7)' : 'rgba(225,232,240,0.4)'; // Center divider is amber/red
+    ctx.beginPath(); 
+    ctx.moveTo(cx + laneOffset * hwN * pA - wA / 2, yA); 
+    ctx.lineTo(cx + laneOffset * hwN * pA + wA / 2, yA);
+    ctx.lineTo(cx + laneOffset * hwN * pB + wB / 2, yB2); 
+    ctx.lineTo(cx + laneOffset * hwN * pB - wB / 2, yB2); 
+    ctx.closePath(); ctx.fill();
   }
 }
 
@@ -674,7 +680,7 @@ function drawReflectors(yH, yB, cx, hwN) {
 }
 
 function drawStreetlights() {
-  const cx = L.cx - S.playerX * 45;
+  const cx = L.cx - S.playerX * 55;
   if (S.inTunnel) {
     for (const l of lights) {
       if (l.z < 1.55 || l.z > 80) continue;
@@ -703,7 +709,7 @@ function drawStreetlights() {
 }
 
 function drawTraffic() {
-  const cx = L.cx - S.playerX * 45;
+  const cx = L.cx - S.playerX * 55;
   for (const c of cars) {
     if (c.z < 1.4 || c.z > 45) continue;
     const pr = project(c.z);
@@ -712,7 +718,7 @@ function drawTraffic() {
     const y = pr.y;
     if (y > L.wBottom + 10) continue;
 
-    const cw = Math.max(2, 0.25 * W * 0.8 * p * 1.15);
+    const cw = Math.max(2, 0.22 * W * 0.8 * p * 1.15);
     const chh = cw * 0.5;
     const left = x - cw / 2;
     const top = y - chh;
@@ -821,7 +827,7 @@ function drawClusterRHD() {
 }
 
 function drawWheelRHD() {
-  const cx = W * 0.765 - S.playerX * 10; // Steering wheel shifts slightly with steering input
+  const cx = W * 0.765 - S.playerX * 10;
   const cy = H * 1.035;
   const rx = W * 0.185;
   const ry = H * 0.245;
@@ -890,7 +896,6 @@ function drawScene() {
 
 function draw() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  // Add subtle engine vibration shake to camera
   const jx = Math.sin(S.t * 6.7) + Math.sin(S.t * 3.1) - S.playerX * 2;
   const jy = Math.sin(S.t * 5.3) + Math.cos(S.t * 2.3);
   ctx.save(); ctx.translate(jx > 1.4 ? 1 : jx < -1.4 ? -1 : 0, jy > 1.5 ? 1 : jy < -1.5 ? -1 : 0);
@@ -1075,15 +1080,15 @@ document.getElementById('musicVol').addEventListener('input', e => {
 
 localAudio.addEventListener('ended', () => playLocalTrack(trackIndex + 1));
 
-/* Playable Steering Key Controls (Arrow keys & A/D) */
 document.addEventListener('keydown', e => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'TEXTAREA') return;
+  if (!document.body.classList.contains('started')) return;
   
   if (e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-    S.steerInput = -0.45; // Steer left across lanes
+    S.steerInput = -0.52; // Shift into Lane 1 (far left)
   } else if (e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-    S.steerInput = 0.45;  // Steer right across lanes
+    S.steerInput = -0.15; // Shift into Lane 2 (middle left) to overtake
   } else if (e.code === 'Space') { 
     e.preventDefault(); 
     if (localAudio.paused) localAudio.play(); else localAudio.pause(); 
@@ -1100,7 +1105,7 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('keyup', e => {
   if (e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A' || e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-    S.steerInput = 0; // Return steering to center when keys are released
+    S.steerInput = -0.35; // Default cruising back toward center-left lane
   }
 });
 
