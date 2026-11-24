@@ -200,6 +200,7 @@ const bootLogs = [
   "> MEMORY: 64KB RAM Verified",
   "> LOADING TOKYO STREET ASSETS & NEON SIGNS ... [OK]",
   "> SYNCHRONIZING WIPER ACTUATORS ... [OK]",
+  "> ENHANCING ATMOSPHERIC RAIN SYNTHESIZER ... [OK]",
   "> ESTABLISHING DASHBOARD AMBIENCE ... [READY]"
 ];
 let logIndex = 0;
@@ -769,7 +770,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-/* ============================ audio ============================ */
+/* ============================ Enhanced Heavy Rain Audio ============================ */
 const AudioEngine = (function () {
   let ctx = null, master = null, rainBus = null, sfxBus = null;
   let whiteBuf = null, pinkBuf = null, shortBuf = null, scrapeGain = null, started = false;
@@ -798,18 +799,33 @@ const AudioEngine = (function () {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
     try { ctx = new AC(); } catch (e) { return false; }
+    
     master = ctx.createGain(); master.gain.value = 0.85; master.connect(ctx.destination);
-    rainBus = ctx.createGain(); rainBus.gain.value = 0.55; rainBus.connect(master);
+    rainBus = ctx.createGain(); rainBus.gain.value = 0.85; rainBus.connect(master); // Boosted base rain volume
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
+    
     whiteBuf = noise(4, false); pinkBuf = noise(4.5, true); shortBuf = noise(0.35, false);
 
+    // Layer 1: Deep rolling heavy rain / roof rumble
     const s1 = ctx.createBufferSource(); s1.buffer = pinkBuf; s1.loop = true; s1.start();
-    const lp = ctx.createBiquadFilter(); lp.frequency.value = 420; s1.connect(lp).connect(rainBus);
+    const lp1 = ctx.createBiquadFilter(); lp1.frequency.value = 320; s1.connect(lp1).connect(rainBus);
 
+    // Layer 2: Mid-range downpour wash / window pelting hiss
+    const s2 = ctx.createBufferSource(); s2.buffer = whiteBuf; s2.loop = true; s2.start();
+    const bp2 = ctx.createBiquadFilter(); bp2.type = 'bandpass'; bp2.frequency.value = 1400; bp2.Q.value = 0.6;
+    s2.connect(bp2).connect(rainBus);
+
+    // Layer 3: High-frequency crisp droplet patter on glass
+    const s3 = ctx.createBufferSource(); s3.buffer = whiteBuf; s3.loop = true; s3.playbackRate.value = 0.8; s3.start();
+    const hp3 = ctx.createBiquadFilter(); hp3.type = 'highpass'; hp3.frequency.value = 4200;
+    const g3 = ctx.createGain(); g3.gain.value = 0.45;
+    s3.connect(hp3).connect(g3).connect(rainBus);
+
+    // Wiper blade rubber scrape track
     const s4 = ctx.createBufferSource(); s4.buffer = whiteBuf; s4.loop = true; s4.start();
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 950;
+    const bpw = ctx.createBiquadFilter(); bpw.type = 'bandpass'; bpw.frequency.value = 950; bpw.Q.value = 0.9;
     scrapeGain = ctx.createGain(); scrapeGain.gain.value = 0;
-    s4.connect(bp).connect(scrapeGain).connect(sfxBus);
+    s4.connect(bpw).connect(scrapeGain).connect(sfxBus);
 
     if (ctx.state === 'suspended') ctx.resume();
     started = true; return true;
@@ -825,7 +841,7 @@ const AudioEngine = (function () {
       o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.27);
     },
     setScrape(v) { if (started && scrapeGain) scrapeGain.gain.setTargetAtTime(clamp(v, 0, 1) * 0.06, ctx.currentTime, 0.06); },
-    setRain(v) { if (started && rainBus) rainBus.gain.setTargetAtTime(Math.pow(clamp(v, 0, 1), 1.25) * 0.95, ctx.currentTime, 0.18); },
+    setRain(v) { if (started && rainBus) rainBus.gain.setTargetAtTime(Math.pow(clamp(v, 0, 1), 1.25) * 1.15, ctx.currentTime, 0.18); },
     resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
   };
 })();
@@ -919,7 +935,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'w' || e.key === 'W') setWiperMode((S.wiperMode + 1) % 3);
 });
 
-/* Fix for Ignite Engine Click Listener Binding */
+/* Engine Ignition Trigger (Fixed) */
 function startEverything() {
   if (document.body.classList.contains('started')) return;
   document.body.classList.add('started');
