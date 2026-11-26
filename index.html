@@ -12,7 +12,6 @@
     --teal:#59e3cf;
     --line:#33414f;
     --text:#a3b6c7;
-    --marq-dur:14s;
   }
   *{box-sizing:border-box}
   html,body{width:100%;height:100%;margin:0;background:#000;overflow:hidden}
@@ -55,11 +54,65 @@
     border:0;
     display:block;
   }
+
+  /* ---------- Rain / Audio Popup Bar ---------- */
+  #rain-pop{
+    position:absolute;
+    z-index:30;
+    width:184px;
+    padding:7px 9px 8px;
+    background:linear-gradient(#131b24,#080c11);
+    border:2px solid #354657;
+    box-shadow:inset 0 0 0 1px #04070a, inset 0 1px 0 #4d6173, 0 10px 26px rgba(0,0,0,.9);
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  #rain-pop[hidden]{display:none !important}
+  .pop-head{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#7fe9d6;
+  }
+  .pop-head b{color:var(--amber);font-weight:400}
+  .pop-bar{display:flex;align-items:center;gap:6px}
+  .pop-bar input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:10px;
+    background:#040a0c;border:1px solid #2b3c48;cursor:pointer;margin:0;
+    box-shadow:inset 0 0 0 1px #000;
+  }
+  .pop-bar input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:9px;height:14px;border:0;
+    background:linear-gradient(#ffd7a0,#e79a3c);box-shadow:0 0 7px rgba(255,170,70,.75);
+  }
+  .pop-bar input[type=range]::-moz-range-thumb{
+    width:9px;height:14px;border:0;border-radius:0;
+    background:linear-gradient(#ffd7a0,#e79a3c);box-shadow:0 0 7px rgba(255,170,70,.75);
+  }
+  .pop-foot{
+    display:flex;justify-content:space-between;
+    font-size:8px;letter-spacing:.10em;color:#5a7488;text-transform:uppercase;
+  }
 </style>
 </head>
 <body>
 <div id="wrapper">
   <canvas id="screen" width="480" height="270" aria-label="16-bit rainy night drive in car"></canvas>
+
+  <div id="rain-pop" role="dialog" aria-label="Rain and audio intensity" hidden>
+    <div class="pop-head">
+      <span>Rain / Audio</span>
+      <b id="rainPct">55%</b>
+    </div>
+    <div class="pop-bar">
+      <input id="rainVol" type="range" min="0" max="100" value="55" aria-label="Rain intensity">
+    </div>
+    <div class="pop-foot">
+      <span>Dry</span>
+      <span>Drizzle</span>
+      <span>Storm</span>
+    </div>
+  </div>
+
   <div id="spSlot">
     <iframe id="spFrame" src="about:blank" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
   </div>
@@ -68,13 +121,17 @@
 
 <script>
 /* ============================ setup ============================ */
+const wrapper = document.getElementById('wrapper');
 const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d', { alpha: false });
 const spSlot = document.getElementById('spSlot');
 const spFrame = document.getElementById('spFrame');
 const fileInput = document.getElementById('fileInput');
+const rainPop = document.getElementById('rain-pop');
+const rainVol = document.getElementById('rainVol');
+const rainPct = document.getElementById('rainPct');
 
-let W = 480, H = 270;
+const W = 480, H = 270;
 const L = {};
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -95,6 +152,7 @@ const S = {
   carEq: true,
   mode: 'local',
   playing: false,
+  dialOpen: false,
   wash: 0
 };
 
@@ -209,6 +267,7 @@ const AudioEngine = (function () {
   let lp1 = null, bp2 = null, g3 = null, scrapeGain = null;
   let whiteBuf = null, pinkBuf = null, shortBuf = null;
   let plinkTimer = null;
+  let rainLevel = S.rain;
   let started = false;
   let mediaAttached = false;
   let eqLow = null, eqMid = null, eqHigh = null;
@@ -230,6 +289,12 @@ const AudioEngine = (function () {
     } else {
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     }
+    const fade = Math.min(600, Math.floor(len / 20));
+    for (let i = 0; i < fade; i++) {
+      const g = i / fade;
+      d[i] *= g;
+      d[len - 1 - i] *= g;
+    }
     return buf;
   }
 
@@ -246,14 +311,14 @@ const AudioEngine = (function () {
     if (started) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    actx = new AC();
+    try { actx = new AC(); } catch (e) { return; }
 
     master = actx.createGain();
     master.gain.value = 0.85;
     master.connect(actx.destination);
 
     rainBus = actx.createGain();
-    rainBus.gain.value = S.rain;
+    rainBus.gain.value = 0;
     rainBus.connect(master);
 
     sfxBus = actx.createGain();
@@ -264,26 +329,42 @@ const AudioEngine = (function () {
     cabinBus.gain.value = 0.10;
     cabinBus.connect(master);
 
-    whiteBuf = noise(3, false);
-    pinkBuf = noise(3.5, true);
+    whiteBuf = noise(3.5, false);
+    pinkBuf = noise(4.0, true);
     shortBuf = noise(0.25, false);
 
-    // Rain Layer 1
+    // Rain Layer 1: roof rumble
     const s1 = loopSource(pinkBuf, 0.82);
     lp1 = actx.createBiquadFilter();
     lp1.type = 'lowpass'; lp1.frequency.value = 340;
-    s1.connect(lp1).connect(rainBus);
+    const g1 = actx.createGain(); g1.gain.value = 0.9;
+    s1.connect(lp1).connect(g1).connect(rainBus);
 
-    // Rain Layer 2
+    // Rain Layer 2: mid-range downpour
     const s2 = loopSource(whiteBuf, 1.0);
     bp2 = actx.createBiquadFilter();
-    bp2.type = 'bandpass'; bp2.frequency.value = 1450;
-    s2.connect(bp2).connect(rainBus);
+    bp2.type = 'bandpass'; bp2.frequency.value = 1450; bp2.Q.value = 0.55;
+    const g2 = actx.createGain(); g2.gain.value = 0.36;
+    s2.connect(bp2).connect(g2).connect(rainBus);
+
+    // Rain Layer 3: fine glass patter
+    const s3 = loopSource(whiteBuf, 0.74);
+    const hp3 = actx.createBiquadFilter();
+    hp3.type = 'highpass'; hp3.frequency.value = 4100;
+    g3 = actx.createGain(); g3.gain.value = 0.14;
+    s3.connect(hp3).connect(g3).connect(rainBus);
+
+    // Slow rain swell LFO
+    const lfo = actx.createOscillator();
+    lfo.frequency.value = 0.07;
+    const lfoGain = actx.createGain(); lfoGain.gain.value = 0.15;
+    lfo.connect(lfoGain).connect(g1.gain);
+    lfo.start();
 
     // Wiper Scrape
     const s4 = loopSource(whiteBuf, 1.0);
     const bpw = actx.createBiquadFilter();
-    bpw.type = 'bandpass'; bpw.frequency.value = 950;
+    bpw.type = 'bandpass'; bpw.frequency.value = 950; bpw.Q.value = 0.9;
     scrapeGain = actx.createGain(); scrapeGain.gain.value = 0;
     s4.connect(bpw).connect(scrapeGain).connect(sfxBus);
 
@@ -304,13 +385,14 @@ const AudioEngine = (function () {
 
     if (actx.state === 'suspended') actx.resume();
     started = true;
+    setRain(rainLevel);
     schedulePlink();
   }
 
   function schedulePlink() {
     plinkTimer = setTimeout(() => {
-      if (started && actx && actx.state === 'running' && S.rain > 0.05) {
-        if (Math.random() < 0.3 + S.rain * 0.7) plink();
+      if (started && actx && actx.state === 'running' && rainLevel > 0.05) {
+        if (Math.random() < 0.3 + rainLevel * 0.7) plink();
       }
       schedulePlink();
     }, 700 + Math.random() * 2800);
@@ -357,39 +439,66 @@ const AudioEngine = (function () {
     eqHigh.frequency.setTargetAtTime(on ? 8200 : 22000, t, 0.08);
   }
 
-  function click() {
-    if (!started) return;
+  function click(withStatic) {
+    if (!started || !actx || actx.state !== 'running') return;
     const t = actx.currentTime;
     const n = actx.createBufferSource(); n.buffer = shortBuf;
-    const g = actx.createGain(); g.gain.setValueAtTime(0.12, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
-    n.connect(g).connect(sfxBus);
-    n.start(t); n.stop(t + 0.035);
+    const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 1.6;
+    const g = actx.createGain(); g.gain.setValueAtTime(0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+    n.connect(bp).connect(g).connect(sfxBus);
+    n.start(t); n.stop(t + 0.03);
+
+    if (withStatic) {
+      const st = actx.createBufferSource(); st.buffer = shortBuf;
+      const stBp = actx.createBiquadFilter(); stBp.type = 'bandpass'; stBp.frequency.value = 1800; stBp.Q.value = 0.8;
+      const stG = actx.createGain(); stG.gain.setValueAtTime(0.0001, t + 0.01);
+      stG.gain.exponentialRampToValueAtTime(0.055, t + 0.035);
+      stG.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+      st.connect(stBp).connect(stG).connect(sfxBus);
+      st.start(t + 0.01); st.stop(t + 0.21);
+    }
   }
 
   function thump() {
-    if (!started) return;
+    if (!started || !actx || actx.state !== 'running') return;
     const t = actx.currentTime;
     const o = actx.createOscillator();
     o.frequency.setValueAtTime(58, t);
     o.frequency.exponentialRampToValueAtTime(37, t + 0.16);
-    const g = actx.createGain(); g.gain.setValueAtTime(0.2, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    const g = actx.createGain(); g.gain.setValueAtTime(0.22, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
     o.connect(g).connect(sfxBus);
-    o.start(t); o.stop(t + 0.25);
+    o.start(t); o.stop(t + 0.27);
   }
 
   function setRain(v) {
-    if (rainBus) rainBus.gain.setTargetAtTime(clamp(v, 0, 1), actx.currentTime, 0.1);
+    rainLevel = clamp(v, 0, 1);
+    if (!started || !actx) return;
+    const t = actx.currentTime;
+    rainBus.gain.setTargetAtTime(Math.pow(rainLevel, 1.18) * 1.05, t, 0.12);
+    if (lp1) lp1.frequency.setTargetAtTime(240 + rainLevel * 280, t, 0.15);
+    if (bp2) bp2.frequency.setTargetAtTime(1100 + rainLevel * 750, t, 0.15);
+    if (g3) g3.gain.setTargetAtTime(0.06 + rainLevel * 0.16, t, 0.15);
   }
 
+  let scrapeLast = -1;
   function setScrape(v) {
-    if (scrapeGain) scrapeGain.gain.setTargetAtTime(clamp(v, 0, 1) * 0.06, actx.currentTime, 0.05);
+    if (!started || !actx || !scrapeGain) return;
+    if (Math.abs(v - scrapeLast) < 0.02) return;
+    scrapeLast = v;
+    scrapeGain.gain.setTargetAtTime(clamp(v, 0, 1) * 0.055, actx.currentTime, 0.06);
   }
 
   return {
     init,
-    unlock() { init(); attachMedia(); },
+    unlock() {
+      try {
+        if (!started) init();
+        else if (actx && actx.state === 'suspended') actx.resume();
+        attachMedia();
+      } catch (e) {}
+    },
     click,
     thump,
     setRain,
@@ -427,7 +536,6 @@ function layout() {
   L.mirrorH = Math.round(H * 0.105);
   L.mirrorY = Math.round(H * 0.045);
 
-  // In-dash retro stereo deck coordinates
   L.deckX = 78;
   L.deckY = 191;
   L.deckW = 202;
@@ -721,6 +829,7 @@ function drawScene() {
     if (c.x > W + 80) c.x = -c.w - 40;
     ctx.fillStyle = 'rgba(38,50,72,' + c.a + ')';
     ctx.fillRect(Math.round(c.x), Math.round(c.y), Math.round(c.w), Math.round(c.h * 0.55));
+    ctx.fillRect(Math.round(c.x + c.w * 0.12), Math.round(c.y - c.h * 0.35), Math.round(c.w * 0.7), Math.round(c.h * 0.5));
   }
 
   // 2. Distant Skyline
@@ -737,7 +846,7 @@ function drawScene() {
     }
   }
 
-  // 3. Roadside Buildings with neon signs
+  // 3. Roadside Japanese Buildings with Neon Signs
   const sortedB = roadBuildings.slice().sort((a, b) => b.z - a.z);
   for (const b of sortedB) {
     const zNear = Math.max(1.4, b.z), zFar = b.z + b.depth;
@@ -763,6 +872,12 @@ function drawScene() {
       ctx.fillRect(Math.round(wx), Math.round(wy), Math.max(1, Math.round(pN.lanePx * 0.1)), Math.max(1, Math.round(pN.lanePx * 0.14)));
     }
 
+    if (b.awning) {
+      const ayN = pN.y - pN.lanePx * 0.55, ayF = pF.y - pF.lanePx * 0.55;
+      const abN = pN.y - pN.lanePx * 0.38, abF = pF.y - pF.lanePx * 0.38;
+      poly([[pN.x, ayN], [pF.x, ayF], [pF.x, abF], [pN.x, abN]], b.side < 0 ? 'rgba(180,60,60,0.55)' : 'rgba(50,120,150,0.5)');
+    }
+
     if (b.hasSign && zNear < 42) {
       const pm = proj(uIn - b.side * 0.16, (zNear + zFar) * 0.5);
       const sw = Math.max(2, Math.round(pm.lanePx * 0.14));
@@ -770,44 +885,60 @@ function drawScene() {
       const sh = Math.max(4, Math.round(b.height * pm.lanePx * b.signH));
       ctx.fillStyle = '#090d14'; ctx.fillRect(Math.round(pm.x - sw / 2 - 1), Math.round(syTop - 1), sw + 2, sh + 2);
       ctx.fillStyle = b.signColor; ctx.fillRect(Math.round(pm.x - sw / 2), Math.round(syTop), sw, sh);
+      ctx.fillStyle = 'rgba(10,16,24,0.75)';
+      for (let ky = syTop + 2; ky < syTop + sh - 2; ky += 3) ctx.fillRect(Math.round(pm.x - sw / 2), Math.round(ky), sw, 1);
+
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      radial(pm.x, syTop + sh * 0.5, Math.max(8, pm.lanePx * 0.6), '255,42,109', 0.25);
+      const rgb = b.signColor === '#ff2a6d' ? '255,42,109' : b.signColor === '#05d9e8' ? '5,217,232' : b.signColor === '#ffb457' ? '255,180,87' : '89,227,207';
+      radial(pm.x, syTop + sh * 0.5, Math.max(8, pm.lanePx * 0.6), rgb, 0.35);
+      radial(pm.x, pm.y + 1, Math.max(6, pm.lanePx * 0.45), rgb, 0.16);
       ctx.restore();
     }
   }
 
-  // 4. Road with Asphalt Sheen
+  // 4. 4-Lane Road with Asphalt Sheen & Puddles
   const yH = L.horizon, yB = L.yB;
   rect(0, yH, W, H - yH, '#06090d');
   const pTopL = proj(-0.55, 95), pTopR = proj(3.55, 95);
   const pBotL = proj(-0.55, 1.6), pBotR = proj(3.55, 1.6);
-  poly([[pTopL.x, yH], [pTopR.x, yH], [pBotR.x, yB + 25], [pBotL.x, yB + 25]], '#0d131c');
+  const rg = ctx.createLinearGradient(0, yH, 0, yB);
+  rg.addColorStop(0, '#121a26'); rg.addColorStop(0.25, '#0c121a'); rg.addColorStop(1, '#080b10');
+  ctx.fillStyle = rg;
+  ctx.beginPath(); ctx.moveTo(pTopL.x, yH); ctx.lineTo(pTopR.x, yH); ctx.lineTo(pBotR.x, yB + 25); ctx.lineTo(pBotL.x, yB + 25); ctx.closePath(); ctx.fill();
 
+  const sheenScale = 0.4 + 0.8 * S.rain;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const sh = ctx.createLinearGradient(0, yH, 0, yH + (yB - yH) * 0.5);
-  sh.addColorStop(0, 'rgba(95,130,175,0.12)'); sh.addColorStop(1, 'rgba(95,130,175,0)');
+  sh.addColorStop(0, 'rgba(95,130,175,' + (0.13 * sheenScale) + ')');
+  sh.addColorStop(0.4, 'rgba(95,130,175,' + (0.05 * sheenScale) + ')');
+  sh.addColorStop(1, 'rgba(95,130,175,0)');
   ctx.fillStyle = sh; ctx.fillRect(0, yH, W, (yB - yH) * 0.5);
 
-  for (const g of puddleGlints) {
-    if (g.z < 1.7) continue;
-    const pr = proj(g.u, g.z);
-    if (pr.y > L.wBottom) continue;
-    const flick = 0.55 + 0.45 * Math.sin(S.t * 1.6 + g.seed);
-    ctx.fillStyle = 'rgba(170,205,240,' + (g.a * flick) + ')';
-    ctx.fillRect(Math.round(pr.x), Math.round(pr.y), Math.max(1, Math.round(pr.p * 5)), 1);
+  if (S.rain > 0.05) {
+    for (const g of puddleGlints) {
+      if (g.z < 1.7) continue;
+      const pr = proj(g.u, g.z);
+      if (pr.y > L.wBottom) continue;
+      const flick = 0.55 + 0.45 * Math.sin(S.t * 1.6 + g.seed);
+      ctx.fillStyle = 'rgba(170,205,240,' + (g.a * flick * S.rain * 1.3) + ')';
+      ctx.fillRect(Math.round(pr.x), Math.round(pr.y), Math.max(1, Math.round(pr.p * 5)), 1);
+    }
   }
   ctx.restore();
 
-  // Outer road curb lines
   ctx.strokeStyle = 'rgba(180,200,220,0.22)'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(pTopL.x, yH); ctx.lineTo(pBotL.x, yB + 20); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(pTopR.x, yH); ctx.lineTo(pBotR.x, yB + 20); ctx.stroke();
 
-  // Lane dividers
-  drawLaneDashes(0.5, 'rgba(225,235,245,0.65)'); // Forward lanes
-  drawCenterMedian(1.5);                         // Center double barrier
-  drawLaneDashes(2.5, 'rgba(225,235,245,0.55)'); // Oncoming lanes
+  drawLaneDashes(0.5, 'rgba(225,235,245,0.65)');
+  drawCenterMedian(1.5);
+  drawLaneDashes(2.5, 'rgba(225,235,245,0.55)');
+  drawReflectors();
+
+  const hg = ctx.createLinearGradient(0, L.horizon - 10, 0, L.horizon + 16);
+  hg.addColorStop(0, 'rgba(120,150,190,0)'); hg.addColorStop(0.55, 'rgba(120,150,190,0.12)'); hg.addColorStop(1, 'rgba(120,150,190,0)');
+  ctx.fillStyle = hg; ctx.fillRect(0, L.horizon - 10, W, 26);
 
   // 5. Streetlights
   for (const l of lights) {
@@ -818,9 +949,19 @@ function drawScene() {
     ctx.fillStyle = '#080d12'; ctx.fillRect(Math.round(pr.x - pw / 2), Math.round(topY), pw, Math.round(ph));
     const armLen = Math.max(3, 38 * pr.p);
     const lx = pr.x - l.side * armLen, ly = topY + Math.max(1, Math.round(2 * pr.p));
-    ctx.fillStyle = '#ffe3b4'; ctx.fillRect(Math.round(lx - 4), Math.round(ly), Math.max(2, Math.round(7 * pr.p)), Math.max(1, Math.round(2 * pr.p)));
+    ctx.fillStyle = '#080d12'; ctx.fillRect(Math.round(Math.min(pr.x, lx)), Math.round(ly), Math.round(Math.abs(lx - pr.x)), Math.max(1, Math.round(2 * pr.p)));
+    const lampW = Math.max(2, Math.round(7 * pr.p));
+    ctx.fillStyle = '#ffe3b4'; ctx.fillRect(Math.round(lx - lampW / 2), Math.round(ly), lampW, Math.max(1, Math.round(2 * pr.p)));
+
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     radial(lx, ly + 2, Math.max(8, 56 * pr.p), '255,186,110', 0.45);
+    radial(lx, pr.y + 2, Math.max(6, 38 * pr.p), '255,170,100', 0.11);
+    const rw = Math.max(2, Math.round(12 * pr.p));
+    const rgl = ctx.createLinearGradient(0, pr.y, 0, pr.y + (L.yB - pr.y) * 0.6);
+    rgl.addColorStop(0, 'rgba(255,178,105,0.16)'); rgl.addColorStop(1, 'rgba(255,150,80,0)');
+    ctx.fillStyle = rgl;
+    const wob = Math.sin(S.t * 1.4 + l.seed) * 1.2;
+    ctx.fillRect(Math.round(lx - rw / 2 + wob), Math.round(pr.y), rw, Math.round((L.yB - pr.y) * 0.6));
     ctx.restore();
   }
 
@@ -836,6 +977,8 @@ function drawScene() {
     ctx.fillStyle = 'rgba(9,11,15,0.95)';
     ctx.fillRect(Math.round(left), Math.round(top + chh * 0.35), Math.round(cw), Math.round(chh * 0.65));
     ctx.fillRect(Math.round(left + cw * 0.16), Math.round(top), Math.round(cw * 0.68), Math.round(chh * 0.45));
+    ctx.fillStyle = 'rgba(130,160,190,0.12)';
+    ctx.fillRect(Math.round(left + cw * 0.18), Math.round(top + chh * 0.06), Math.round(cw * 0.64), 1);
 
     const lw = Math.max(1, Math.round(cw * 0.16)), lh = Math.max(1, Math.round(chh * 0.18)), ly = top + chh * 0.52;
     if (c.type === 'oncoming') {
@@ -845,76 +988,146 @@ function drawScene() {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       radial(left + cw * 0.18, ly, Math.max(4, cw * 0.85), '255,245,210', 0.42);
       radial(left + cw * 0.82, ly, Math.max(4, cw * 0.85), '255,245,210', 0.42);
+      const rr = ctx.createLinearGradient(0, pr.y, 0, pr.y + chh * 1.4);
+      rr.addColorStop(0, 'rgba(255,240,200,0.20)'); rr.addColorStop(1, 'rgba(255,240,200,0)');
+      ctx.fillStyle = rr;
+      ctx.fillRect(Math.round(left + cw * 0.04), Math.round(pr.y), Math.round(cw * 0.25), Math.round(chh * 1.4));
+      ctx.fillRect(Math.round(left + cw * 0.71), Math.round(pr.y), Math.round(cw * 0.25), Math.round(chh * 1.4));
       ctx.restore();
     } else {
       ctx.fillStyle = '#ff4436';
       ctx.fillRect(Math.round(left + cw * 0.10), Math.round(ly), lw, lh);
       ctx.fillRect(Math.round(left + cw * 0.74), Math.round(ly), lw, lh);
+      ctx.fillStyle = 'rgba(255,225,180,0.35)';
+      ctx.fillRect(Math.round(left + cw * 0.45), Math.round(top + chh * 0.62), Math.max(1, Math.round(cw * 0.12)), 1);
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       radial(left + cw * 0.18, ly, Math.max(3, cw * 0.65), '255,60,40', 0.30);
       radial(left + cw * 0.82, ly, Math.max(3, cw * 0.65), '255,60,40', 0.30);
+      const rr = ctx.createLinearGradient(0, pr.y, 0, pr.y + chh * 1.15);
+      rr.addColorStop(0, 'rgba(255,60,40,0.16)'); rr.addColorStop(1, 'rgba(255,40,30,0)');
+      ctx.fillStyle = rr;
+      ctx.fillRect(Math.round(left + cw * 0.04), Math.round(pr.y), Math.round(cw * 0.22), Math.round(chh * 1.15));
+      ctx.fillRect(Math.round(left + cw * 0.74), Math.round(pr.y), Math.round(cw * 0.22), Math.round(chh * 1.15));
       ctx.restore();
     }
   }
 
-  // 7. Rain and Streaks
-  for (const s of streaks) {
-    ctx.fillStyle = 'rgba(175,205,235,' + s.a + ')';
-    ctx.fillRect(Math.round(s.x), Math.round(Math.max(L.wTop, s.y - s.len)), 1, Math.round(s.len));
+  // 7. Rain & Streaks (scaled by S.rain)
+  if (S.rain > 0.05) {
+    const nStreaks = Math.round(streaks.length * S.rain);
+    for (let i = 0; i < nStreaks; i++) {
+      const s = streaks[i];
+      ctx.fillStyle = 'rgba(175,205,235,' + (s.a * S.rain * 1.3) + ')';
+      ctx.fillRect(Math.round(s.x), Math.round(Math.max(L.wTop, s.y - s.len)), 1, Math.round(s.len));
+    }
   }
-  ctx.lineWidth = 1;
-  for (const r of rainFar) {
-    if (r.y < L.wTop - 6 || r.y > L.wBottom + 4) continue;
-    ctx.strokeStyle = 'rgba(155,185,215,' + r.a + ')';
-    ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + r.len * 0.28, r.y + r.len); ctx.stroke();
-  }
-  for (const r of rainNear) {
-    if (r.y < L.wTop - 10 || r.y > L.wBottom + 6) continue;
-    ctx.strokeStyle = 'rgba(185,215,240,' + r.a + ')';
-    ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + r.len * 0.30, r.y + r.len); ctx.stroke();
+  if (S.rain > 0.01) {
+    ctx.lineWidth = 1;
+    const nFar = Math.round(rainFar.length * S.rain);
+    const nNear = Math.round(rainNear.length * S.rain);
+    const alphaBoost = 0.55 + S.rain * 0.65;
+    for (let i = 0; i < nFar; i++) {
+      const r = rainFar[i];
+      if (r.y < L.wTop - 6 || r.y > L.wBottom + 4) continue;
+      ctx.strokeStyle = 'rgba(155,185,215,' + (r.a * alphaBoost) + ')';
+      ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + r.len * 0.28, r.y + r.len); ctx.stroke();
+    }
+    for (let i = 0; i < nNear; i++) {
+      const r = rainNear[i];
+      if (r.y < L.wTop - 10 || r.y > L.wBottom + 6) continue;
+      ctx.strokeStyle = 'rgba(185,215,240,' + (r.a * alphaBoost) + ')';
+      ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + r.len * 0.30, r.y + r.len); ctx.stroke();
+    }
   }
 
-  // 8. Glass droplets
-  for (const d of drops) {
-    const x = Math.round(d.x), y = Math.round(d.y);
-    if (d.trail > 2) {
-      const ty = Math.max(L.wTop, y - d.trail);
-      ctx.fillStyle = 'rgba(165,200,230,' + (d.a * 0.45) + ')';
-      ctx.fillRect(x, ty, 1, Math.max(1, y - ty));
+  // 8. Glass Droplets (scaled by S.rain)
+  if (S.rain > 0.01) {
+    const activeDrops = Math.round(drops.length * clamp(S.rain * 1.1, 0, 1));
+    for (let i = 0; i < activeDrops; i++) {
+      const d = drops[i];
+      const x = Math.round(d.x), y = Math.round(d.y);
+      if (d.trail > 2) {
+        const ty = Math.max(L.wTop, y - d.trail);
+        const tg = ctx.createLinearGradient(0, ty, 0, y);
+        tg.addColorStop(0, 'rgba(150,190,220,0)'); tg.addColorStop(1, 'rgba(165,200,230,' + (d.a * 0.45) + ')');
+        ctx.fillStyle = tg; ctx.fillRect(x, ty, 1, Math.max(1, y - ty));
+      }
+      if (d.r > 2.4) {
+        ctx.fillStyle = 'rgba(120,170,205,' + (d.a * 0.42) + ')'; ctx.fillRect(x - 1, y, 3, 5);
+        ctx.fillStyle = 'rgba(200,230,250,' + (d.a * 0.75) + ')'; ctx.fillRect(x - 1, y + 1, 2, 3);
+        ctx.fillStyle = 'rgba(245,252,255,' + Math.min(0.95, d.a * 1.5) + ')'; ctx.fillRect(x - 1, y + 1, 1, 1);
+      } else if (d.r > 1.5) {
+        ctx.fillStyle = 'rgba(110,160,195,' + (d.a * 0.45) + ')'; ctx.fillRect(x - 1, y - 1, 3, 4);
+        ctx.fillStyle = 'rgba(245,252,255,' + Math.min(0.9, d.a * 1.4) + ')'; ctx.fillRect(x, y, 1, 1);
+      } else {
+        ctx.fillStyle = 'rgba(170,205,235,' + (d.a * 0.8) + ')'; ctx.fillRect(x, y, 1, 2);
+      }
     }
-    ctx.fillStyle = 'rgba(200,230,250,' + (d.a * 0.75) + ')';
-    ctx.fillRect(x, y, 1, 1);
   }
 
   // 9. Animated Wipers
   for (const w of wipers) {
     const cos = Math.cos(w.angle), sin = Math.sin(w.angle);
     const tipx = w.px + cos * w.len, tipy = w.py - sin * w.len;
+    if (S.wiperMode > 0) {
+      const delta = Math.abs(w.angle - w.prevAngle);
+      if (delta > 0.001 && delta < 0.3) {
+        ctx.beginPath(); ctx.moveTo(w.px, w.py);
+        ctx.arc(w.px, w.py, w.len, -w.prevAngle, -w.angle, w.angle > w.prevAngle);
+        ctx.closePath(); ctx.fillStyle = 'rgba(175,205,235,0.018)'; ctx.fill();
+      }
+    }
+    const ax = w.px + cos * w.len * 0.62, ay = w.py - sin * w.len * 0.62;
     ctx.strokeStyle = '#0c1116'; ctx.lineWidth = Math.max(3, Math.round(H * 0.024));
-    ctx.beginPath(); ctx.moveTo(w.px, w.py); ctx.lineTo(w.px + cos * w.len * 0.62, w.py - sin * w.len * 0.62); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w.px, w.py); ctx.lineTo(ax, ay); ctx.stroke();
+
+    const bx0 = w.px + cos * w.len * 0.30, by0 = w.py - sin * w.len * 0.30;
     ctx.strokeStyle = '#1a222b'; ctx.lineWidth = Math.max(4, Math.round(H * 0.032));
-    ctx.beginPath(); ctx.moveTo(w.px + cos * w.len * 0.3, w.py - sin * w.len * 0.3); ctx.lineTo(tipx, tipy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx0, by0); ctx.lineTo(tipx, tipy); ctx.stroke();
+
+    ctx.strokeStyle = '#05080b'; ctx.lineWidth = Math.max(2, Math.round(H * 0.016));
+    ctx.beginPath(); ctx.moveTo(bx0, by0); ctx.lineTo(tipx, tipy); ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(200,222,245,0.24)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bx0 + 2, by0 - 2); ctx.lineTo(tipx + 2, tipy - 2); ctx.stroke();
+
+    pixCircle(tipx, tipy, 1, '#2c3742'); pixCircle(w.px, w.py, 2, '#0b1015');
   }
+
+  // Glass haze
+  const ghz = ctx.createLinearGradient(0, L.wBottom - H * 0.20, 0, L.wBottom);
+  ghz.addColorStop(0, 'rgba(255,150,60,0)'); ghz.addColorStop(1, 'rgba(255,150,60,0.10)');
+  ctx.fillStyle = ghz; ctx.fillRect(0, L.wBottom - H * 0.20, W, H * 0.20);
+  ctx.fillStyle = 'rgba(30,50,72,' + (0.04 + S.rain * 0.10) + ')';
+  ctx.fillRect(0, L.wTop, W, L.wBottom - L.wTop);
 
   // Toast
   if (S.wiperToast > 0) {
     const txt = ['WIPERS: OFF', 'WIPERS: SLOW', 'WIPERS: FAST'][S.wiperMode];
-    rect(L.pad + 10, L.wBottom - 16, 76, 12, '#060a0f');
-    pixText(txt, L.pad + 12, L.wBottom - 14, 1, '#59e3cf');
+    const a = clamp(S.wiperToast * 1.5, 0, 1);
+    const tx = L.pad + 12, ty = L.wBottom - 16;
+    ctx.fillStyle = 'rgba(6,12,18,' + (0.78 * a) + ')';
+    ctx.fillRect(tx - 3, ty - 3, txt.length * 4 + 5, 11);
+    pixText(txt, tx, ty, 1, 'rgba(127,233,214,' + a + ')');
   }
 
   ctx.restore();
 }
 
 function drawLaneDashes(u, color) {
-  const P = 8, DASH = 3.4, base = S.scroll;
+  const P = 8, DASH = 3.4, zN = 1.6, zF = 95, base = S.scroll;
+  const n0 = Math.floor((base + zN) / P), n1 = Math.ceil((base + zF) / P);
   ctx.fillStyle = color;
-  for (let n = Math.ceil((base + 90) / P); n >= Math.floor((base + 2) / P); n--) {
-    let zA = Math.max(1.6, n * P - base);
-    let zB = Math.min(95, zA + DASH);
-    if (zA >= zB) continue;
+  for (let n = n1; n >= n0; n--) {
+    let zA = n * P - base, zB = zA + DASH;
+    if (zB < zN || zA > zF) continue;
+    zA = Math.max(zA, zN); zB = Math.min(zB, zF);
     const pA = proj(u, zA), pB = proj(u, zB);
-    rect(pA.x - 1, pA.y, 2, Math.max(1, pB.y - pA.y), color);
+    const wA = Math.max(1, Math.round(4 * pA.p)), wB = Math.max(1, Math.round(4 * pB.p));
+    ctx.beginPath();
+    ctx.moveTo(pA.x - wA / 2, pA.y); ctx.lineTo(pA.x + wA / 2, pA.y);
+    ctx.lineTo(pB.x + wB / 2, pB.y); ctx.lineTo(pB.x - wB / 2, pB.y);
+    ctx.closePath(); ctx.fill();
   }
 }
 
@@ -926,64 +1139,136 @@ function drawCenterMedian(u) {
   ctx.beginPath(); ctx.moveTo(pTop.x, L.horizon); ctx.lineTo(pBot.x + 2, L.yB + 15); ctx.stroke();
 }
 
+function drawReflectors() {
+  const P = 6.5, zN = 1.6, zF = 34, base = S.scroll;
+  const n0 = Math.floor((base + zN) / P), n1 = Math.ceil((base + zF) / P);
+  for (let n = n0; n <= n1; n++) {
+    const z = n * P - base;
+    if (z < zN || z > zF) continue;
+    const prL = proj(-0.52, z), prM = proj(1.5, z);
+    const a = clamp(1.2 - z / zF, 0.1, 0.9);
+    if (prL.y <= L.wBottom) {
+      ctx.fillStyle = 'rgba(255,190,120,' + (a * 0.85) + ')';
+      ctx.fillRect(Math.round(prL.x), Math.round(prL.y) - 1, 1, 1);
+    }
+    if (prM.y <= L.wBottom) {
+      ctx.fillStyle = 'rgba(255,110,80,' + (a * 0.9) + ')';
+      ctx.fillRect(Math.round(prM.x), Math.round(prM.y) - 1, 2, 1);
+    }
+  }
+}
+
 /* ============================ Draw Cabin ============================ */
 function drawCabin() {
   const d = L.dashTop;
 
-  // 1. Dashboard body
-  poly([[-2, H + 2], [-2, d + 16], [W * 0.06, d + 11], [W * 0.24, d + 4], [W * 0.46, d + 10], [W * 0.74, d - 2], [W + 2, d + 17], [W + 2, H + 2]], '#0e141c');
-  rect(-2, d + 16, W + 4, 1, '#2c3b4a');
+  // 1. Curved dashboard body
+  ctx.beginPath();
+  ctx.moveTo(-2, H + 2);
+  ctx.lineTo(-2, d + 16);
+  ctx.bezierCurveTo(W * 0.06, d + 11, W * 0.14, d + 6, W * 0.24, d + 4);
+  ctx.bezierCurveTo(W * 0.36, d + 2, W * 0.46, d + 10, W * 0.58, d + 5);
+  ctx.bezierCurveTo(W * 0.74, d - 2, W * 0.90, d + 3, W + 2, d + 17);
+  ctx.lineTo(W + 2, H + 2);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, d, 0, H);
+  g.addColorStop(0, '#11171f'); g.addColorStop(0.35, '#0b1016'); g.addColorStop(1, '#040608');
+  ctx.fillStyle = g; ctx.fill();
 
-  // Passenger ambient strip
+  ctx.beginPath();
+  ctx.moveTo(-2, d + 16);
+  ctx.bezierCurveTo(W * 0.06, d + 11, W * 0.14, d + 6, W * 0.24, d + 4);
+  ctx.bezierCurveTo(W * 0.36, d + 2, W * 0.46, d + 10, W * 0.58, d + 5);
+  ctx.bezierCurveTo(W * 0.74, d - 2, W * 0.90, d + 3, W + 2, d + 17);
+  ctx.strokeStyle = 'rgba(140,170,200,0.22)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // Ambient strip + vents
   ctx.fillStyle = 'rgba(60,200,180,0.16)';
   ctx.fillRect(Math.round(W * 0.08), Math.round(d + 7), Math.round(W * 0.18), 1);
-
-  // Vents
   ctx.fillStyle = '#05080b';
   for (let i = 0; i < 5; i++) {
     ctx.fillRect(Math.round(W * 0.18 + i * 7), Math.round(d + 11), 4, 1);
     ctx.fillRect(Math.round(W * 0.88 + i * 7), Math.round(d + 13), 4, 1);
   }
 
-  // 2. High-detail RHD Gauge Cluster (Right side)
-  const cy = Math.round(H * 0.785);
-  const cx1 = Math.round(W * 0.825);
-  const cx2 = Math.round(W * 0.700);
+  // Left air vent
+  const vx = Math.round(W * 0.014), vy = Math.round(H * 0.768), vw = Math.round(W * 0.054), vh = Math.round(H * 0.062);
+  rect(vx, vy, vw, vh, '#070b0f');
+  ctx.strokeStyle = 'rgba(120,150,175,0.25)'; ctx.strokeRect(vx + 0.5, vy + 0.5, vw - 1, vh - 1);
+  for (let i = 0; i < 4; i++) rect(vx + 2, vy + 4 + i * 4, vw - 4, 1, 'rgba(140,170,200,0.16)');
 
+  // 2. High-detail RHD Gauge Cluster (Right side)
+  const cy = Math.round(H * 0.785), cx1 = Math.round(W * 0.825), cx2 = Math.round(W * 0.700);
   ctx.fillStyle = '#06090c';
-  ctx.beginPath();
-  ctx.ellipse(W * 0.76, cy + Math.round(H * 0.02), W * 0.19, H * 0.13, 0, Math.PI, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.ellipse(W * 0.76, cy + Math.round(H * 0.02), W * 0.19, H * 0.13, 0, Math.PI, Math.PI * 2); ctx.fill();
 
   drawGauge(cx1, cy, Math.round(H * 0.072), clamp((S.speedKmh - 40) / 120, 0, 1), 'KM/H');
   drawGauge(cx2, cy + 2, Math.round(H * 0.050), 0.30 + Math.sin(S.t * 0.8) * 0.03, 'RPM', '90,200,190');
-  pixText(String(Math.round(S.speedKmh)), cx1 - 6, cy + Math.round(H * 0.035), 1, '#ffb457');
+
+  const sp = String(Math.round(S.speedKmh)).padStart(3, ' ');
+  pixText(sp, cx1 - 6, cy + Math.round(H * 0.035), 1, 'rgba(255,180,100,0.75)');
+  const wCol = S.wiperMode === 2 ? 'rgba(255,180,90,0.95)' : S.wiperMode === 1 ? 'rgba(89,227,207,0.85)' : 'rgba(100,120,140,0.5)';
+  pixText('W' + S.wiperMode, cx2 - 4, cy + Math.round(H * 0.056), 1, wCol);
 
   // 3. Right-hand drive steering wheel
-  const wcx = W * 0.815, wcy = H * 1.035;
-  ellipseRing(wcx, wcy, W * 0.172, H * 0.245, 12, '#0b0e13');
-  pixCircle(wcx, wcy, Math.round(H * 0.055), '#0a0e13');
+  const wcx = W * 0.815, wcy = H * 1.035, rx = W * 0.172, ry = H * 0.245, thick = Math.max(8, Math.round(H * 0.042));
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath(); ctx.ellipse(wcx - 5, wcy + 4, rx + thick * 0.4, ry, 0, 0, Math.PI * 2); ctx.fill();
+  ellipseRing(wcx, wcy, rx, ry, thick, '#0b0e13');
+  ctx.strokeStyle = 'rgba(150,175,200,0.30)'; ctx.lineWidth = Math.max(1, Math.round(H * 0.008));
+  ctx.beginPath(); ctx.ellipse(wcx, wcy, rx - thick * 0.5, ry - thick * 0.5, 0, rad(240), rad(344)); ctx.stroke();
 
-  // 4. Big Rain Dial (Left)
+  const spoke = (a, wid) => {
+    const x1 = wcx + Math.cos(a) * (rx - thick * 0.2), y1 = wcy + Math.sin(a) * (ry - thick * 0.2);
+    const x2 = wcx + Math.cos(a + 0.16) * (rx * 0.16), y2 = wcy + Math.sin(a + 0.16) * (ry * 0.16);
+    ctx.beginPath(); ctx.moveTo(x1 - wid, y1); ctx.lineTo(x1 + wid, y1); ctx.lineTo(x2 + wid * 2.2, y2); ctx.lineTo(x2 - wid * 2.2, y2); ctx.closePath();
+    ctx.fillStyle = '#0a0d12'; ctx.fill();
+  };
+  spoke(rad(205), Math.round(thick * 0.55));
+  spoke(rad(335), Math.round(thick * 0.55));
+  spoke(rad(90), Math.round(thick * 0.5));
+
+  pixCircle(wcx, wcy, Math.round(H * 0.055), '#0a0e13');
+  pixCircle(wcx, wcy, Math.round(H * 0.045), '#121922');
+  ctx.strokeStyle = 'rgba(255,180,100,0.35)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(wcx, wcy, H * 0.024, 0, Math.PI * 2); ctx.stroke();
+
+  // 4. Big Rain Dial & Hazard Switch
   drawBigRainDial();
+
+  const sx = L.deckX, sy = L.deckY, sw = L.deckW, sh = L.deckH;
+  const rkx = sx + sw + 12, rky = sy + sh * 0.58;
+  pixCircle(rkx, rky, 6, '#06090d'); pixCircle(rkx, rky, 4, '#1a232c');
+  ctx.strokeStyle = '#ffc98c'; ctx.lineWidth = 1;
+  const ra = rad(-90 + (S.vol - 0.5) * 240);
+  ctx.beginPath(); ctx.moveTo(rkx, rky); ctx.lineTo(rkx + Math.cos(ra) * 4, rky + Math.sin(ra) * 4); ctx.stroke();
+
+  const hx = sx + sw + 8, hy = sy + 2;
+  rect(hx, hy, 9, 8, '#1a1010');
+  ctx.fillStyle = 'rgba(255,80,65,' + (0.55 + 0.25 * Math.sin(S.t * 3)) + ')';
+  ctx.beginPath(); ctx.moveTo(hx + 4.5, hy + 2); ctx.lineTo(hx + 8, hy + 7); ctx.lineTo(hx + 1, hy + 7); ctx.closePath(); ctx.fill();
 
   // 5. In-Dash Stereo Deck
   drawStereoDeck();
 
-  // 6. A-pillars, roof, mirror, freshener
+  // 6. A-pillars, roof, mirror, headlight wash
   drawApillar(false);
   drawApillar(true);
   drawRoof();
   drawMirror();
+  if (S.wash > 0.02) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    radial(W * 0.88, H * 0.56, W * 0.44, '255,240,205', S.wash * 0.14);
+    radial(W * 0.72, H * 0.76, W * 0.25, '255,235,190', S.wash * 0.08);
+    ctx.restore();
+  }
 }
 
 function drawGauge(cx, cy, r, frac, label, tint) {
   pixCircle(cx, cy + 1, r + 2, 'rgba(0,0,0,0.55)');
   pixCircle(cx, cy, r + 1, '#05080b');
   pixCircle(cx, cy, r, '#121a21');
-  ctx.save();
-  radial(cx, cy, r, tint || '255,150,60', 0.20);
-  ctx.restore();
+  ctx.save(); radial(cx, cy, r, tint || '255,150,60', 0.20); ctx.restore();
 
   const start = Math.PI * 0.78, span = Math.PI * 1.44;
   for (let i = 0; i <= 16; i++) {
@@ -997,6 +1282,9 @@ function drawGauge(cx, cy, r, frac, label, tint) {
     ctx.stroke();
   }
 
+  ctx.strokeStyle = 'rgba(255,80,60,0.55)';
+  ctx.beginPath(); ctx.arc(cx, cy, r - 3.2, start + span * 0.84, start + span * 0.99); ctx.stroke();
+
   const na = start + span * clamp(frac, 0, 1);
   ctx.strokeStyle = '#ff7a48'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(na) * (r - 4), cy + Math.sin(na) * (r - 4)); ctx.stroke();
@@ -1006,9 +1294,11 @@ function drawGauge(cx, cy, r, frac, label, tint) {
 
 function drawBigRainDial() {
   const dial = UI.dialRain;
-  pixText('RAIN', dial.cx - 7, dial.cy - dial.r - 9, 1, '#7fe9d6');
+  const active = S.dialOpen || pressedBtn === 'dialRain';
+  pixText('RAIN', dial.cx - 7, dial.cy - dial.r - 9, 1, active ? '#7fe9d6' : 'rgba(155,190,210,0.72)');
+  pixCircle(dial.cx, dial.cy + 1, dial.r + 4, 'rgba(0,0,0,0.65)');
   pixCircle(dial.cx, dial.cy, dial.r + 3, '#05080c');
-  pixCircle(dial.cx, dial.cy, dial.r - 1, '#1a242f');
+  pixCircle(dial.cx, dial.cy, dial.r + 2, active ? '#1c3b3a' : '#16202a');
 
   const aStart = rad(135), aSpan = rad(270);
   for (let i = 0; i <= 10; i++) {
@@ -1018,57 +1308,56 @@ function drawBigRainDial() {
     ctx.fillRect(Math.round(dial.cx + Math.cos(a) * (dial.r + 1)), Math.round(dial.cy + Math.sin(a) * (dial.r + 1)), 2, 2);
   }
 
+  pixCircle(dial.cx, dial.cy, dial.r - 1, '#0b1016');
+  pixCircle(dial.cx, dial.cy, dial.r - 3, '#1a242f');
+  ctx.save(); radial(dial.cx, dial.cy, dial.r + 2, active ? '89,227,207' : '255,160,70', active ? 0.34 : 0.22); ctx.restore();
+
   const pointerAng = aStart + aSpan * S.rain;
   ctx.strokeStyle = '#ffd194'; ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(dial.cx, dial.cy);
+  ctx.moveTo(dial.cx + Math.cos(pointerAng) * 2, dial.cy + Math.sin(pointerAng) * 2);
   ctx.lineTo(dial.cx + Math.cos(pointerAng) * (dial.r - 4), dial.cy + Math.sin(pointerAng) * (dial.r - 4));
   ctx.stroke();
+  pixCircle(dial.cx, dial.cy, 2, '#0f161e');
 }
 
 function drawStereoDeck() {
   const x = L.deckX, y = L.deckY, w = L.deckW, h = L.deckH;
   rect(x - 3, y - 2, w + 6, h + 4, '#080c10');
+  ctx.strokeStyle = 'rgba(130,160,185,0.22)'; ctx.lineWidth = 1;
+  ctx.strokeRect(x - 2.5, y - 1.5, w + 5, h + 3);
   rect(x, y, w, h, '#121820');
 
-  // Left button column
   rect(x + 2, y + 2, 54, h - 4, '#090d12');
   pixText('CAR-DECK', x + 6, y + 5, 1, '#5d7488');
 
-  // 1. LOCAL
   const b1 = UI.btnLocal, b1Act = S.mode === 'local';
   rect(b1.x, b1.y, b1.w, b1.h, pressedBtn === 'local' ? '#072422' : (b1Act ? '#0d3b38' : '#16202a'));
   pixCircle(b1.x + 6, b1.y + 8, 2, b1Act ? '#59e3cf' : '#22303c');
   pixText('LOCAL', b1.x + 13, b1.y + 5, 1, b1Act ? '#59e3cf' : '#91a7ba');
 
-  // 2. SPOTIFY
   const b2 = UI.btnSpotify, b2Act = S.mode === 'spotify';
   rect(b2.x, b2.y, b2.w, b2.h, pressedBtn === 'spotify' ? '#072422' : (b2Act ? '#0d3b38' : '#16202a'));
   pixCircle(b2.x + 6, b2.y + 8, 2, b2Act ? '#59e3cf' : '#22303c');
   pixText('SPOTIFY', b2.x + 12, b2.y + 5, 1, b2Act ? '#59e3cf' : '#91a7ba');
 
-  // 3. + MP3
   const b3 = UI.btnLoadMp3;
   rect(b3.x, b3.y, b3.w, b3.h, pressedBtn === 'loadMp3' ? '#171109' : '#261e14');
   pixText('+ MP3', b3.x + 14, b3.y + 5, 1, '#ffd7a0');
 
-  // LCD Bezel
   const lcd = UI.lcd;
   rect(lcd.x, lcd.y, lcd.w, lcd.h, '#030a09');
 
   if (S.mode === 'local') {
     spSlot.style.display = 'none';
 
-    // Status tag
     rect(lcd.x + 3, lcd.y + 3, 20, 8, '#161008');
     pixText(S.playing ? 'PLAY' : (localTracks.length ? 'PAUS' : 'IDLE'), lcd.x + 4, lcd.y + 4, 1, '#ffb457');
 
-    // CAR EQ Button
     const eq = UI.btnCarEq;
     rect(eq.x, eq.y, eq.w, eq.h, S.carEq ? '#0a2c29' : '#051010');
     pixText('CAR', eq.x + 3, eq.y + 2, 1, S.carEq ? '#59e3cf' : '#334e4b');
 
-    // Scrolling track title
     ctx.save();
     ctx.beginPath(); ctx.rect(lcd.x + 28, lcd.y + 3, lcd.w - 52, 10); ctx.clip();
     marqueeOffset = (marqueeOffset + 0.35) % 240;
@@ -1076,7 +1365,6 @@ function drawStereoDeck() {
     pixText(trackTitle, lcd.x + 28 - marqueeOffset + 180, lcd.y + 4, 1, '#7fe9d6');
     ctx.restore();
 
-    // Visualizer bars
     for (let i = 0; i < 18; i++) {
       let bh = 1;
       if (S.playing) bh = Math.round(Math.abs(Math.sin(S.t * (3.5 + i * 0.4) + i)) * 18) + 1;
@@ -1084,7 +1372,6 @@ function drawStereoDeck() {
       rect(lcd.x + 14 + i * 6, lcd.y + 38 - Math.min(bh, 4), 4, Math.min(bh, 4), '#59e3cf');
     }
 
-    // Transport buttons
     const bp = UI.btnPrev;
     rect(bp.x, bp.y, bp.w, bp.h, pressedBtn === 'prev' ? '#183430' : '#0c1a18');
     pixText('<<', bp.x + 4, bp.y + 4, 1, '#59e3cf');
@@ -1097,7 +1384,6 @@ function drawStereoDeck() {
     rect(bn.x, bn.y, bn.w, bn.h, pressedBtn === 'next' ? '#183430' : '#0c1a18');
     pixText('>>', bn.x + 4, bn.y + 4, 1, '#59e3cf');
 
-    // Volume bar
     pixText('VOL', lcd.x + 67, lcd.y + 50, 1, '#5c8f87');
     const vb = UI.volBar;
     rect(vb.x, vb.y, vb.w, vb.h, '#040d0c');
@@ -1112,34 +1398,78 @@ function drawApillar(flip) {
   const outer = flip ? W - L.pad - 14 : L.pad + 14;
   const innerBottom = flip ? W - L.pad + 2 : L.pad - 2;
   poly([[x, -2], [outer, L.wTop - 2], [innerBottom, L.wBottom + 4], [x, H + 2]], '#070a0d');
+  ctx.strokeStyle = 'rgba(110,135,160,0.16)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(outer, L.wTop); ctx.lineTo(innerBottom, L.wBottom + 2); ctx.stroke();
 }
 
 function drawRoof() {
   rect(-2, -2, W + 4, L.wTop + 6, '#070a0d');
+  const vh = Math.round(H * 0.052);
+  const visor = (x, w, hingeRight) => {
+    ctx.fillStyle = '#101519';
+    ctx.beginPath(); ctx.moveTo(x, -2); ctx.lineTo(x + w, -2);
+    ctx.lineTo(x + w - (hingeRight ? 6 : 0), vh); ctx.lineTo(x + (hingeRight ? 0 : 6), vh);
+    ctx.closePath(); ctx.fill();
+  };
+  visor(W * 0.03, W * 0.31, false);
+  visor(W * 0.66, W * 0.31, true);
+
   ctx.save();
   windshieldPath();
   ctx.strokeStyle = '#05080b'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.strokeStyle = 'rgba(110,135,160,0.12)'; ctx.lineWidth = 1; ctx.stroke();
   ctx.restore();
 }
 
 function drawMirror() {
   const cx = L.mirrorCx, w = L.mirrorW, h = L.mirrorH, y = L.mirrorY;
   rect(cx - 3, 0, 6, y + 4, '#0a0e12');
-  rect(cx - w / 2, y, w, h, '#151b22');
-  rect(cx - w / 2 + 3, y + 3, w - 6, h - 6, '#0a1218');
+  const x = cx - w / 2;
+  rect(x, y, w, h, '#151b22');
+  const gx = x + 3, gy = y + 3, gw = w - 6, gh = h - 6;
+  rect(gx, gy, gw, gh, '#0a1218');
 
-  // Pine freshener
+  const hl = Math.sin(S.t * 0.35) * 5;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  radial(cx - 12 + hl, gy + gh * 0.45, 8, '255,235,200', 0.42);
+  radial(cx + 8 + hl, gy + gh * 0.43, 6, '255,220,180', 0.30);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,240,215,0.85)';
+  ctx.fillRect(Math.round(cx - 14 + hl), Math.round(gy + gh * 0.45), 2, 1);
+  ctx.fillRect(Math.round(cx + 6 + hl), Math.round(gy + gh * 0.43), 2, 1);
+
   const sway = Math.sin(S.t * 1.15) * 2.2;
+  const tx = cx + 14, ty = y + h;
   ctx.strokeStyle = 'rgba(190,200,210,0.35)';
-  ctx.beginPath(); ctx.moveTo(cx + 14, y + h); ctx.lineTo(cx + 14 + sway, y + h + 7); ctx.stroke();
-  const px = cx + 14 + sway, py = y + h + 8;
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + sway, ty + 7); ctx.stroke();
+  const px = tx + sway, py = ty + 8;
   poly([[px, py], [px - 4, py + 10], [px + 4, py + 10]], '#123a2a');
+}
+
+function drawPost() {
+  ctx.fillStyle = 'rgba(0,0,0,0.055)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const g = ctx.createRadialGradient(W * 0.5, H * 0.47, H * 0.20, W * 0.5, H * 0.47, W * 0.80);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.62, 'rgba(0,0,0,0.16)'); g.addColorStop(1, 'rgba(0,0,0,0.62)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  radial(W * 0.76, H * 0.95, W * 0.30, '255,150,70', 0.09);
+  radial(W * 0.36, H * 0.85, W * 0.22, '70,220,200', 0.06);
+  ctx.restore();
 }
 
 function draw() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const jx = Math.sin(S.t * 6.7) + Math.sin(S.t * 3.1), jy = Math.sin(S.t * 5.3) + Math.cos(S.t * 2.3);
+  const shakeX = jx > 1.4 ? 1 : jx < -1.4 ? -1 : 0;
+  const shakeY = jy > 1.5 ? 1 : jy < -1.5 ? -1 : 0;
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
   drawScene();
   drawCabin();
+  ctx.restore();
+  drawPost();
 }
 
 let lastT = 0;
@@ -1152,9 +1482,10 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-/* ============================ Coordinate Hit-Testing ============================ */
-function getCanvasCoords(e) {
+/* ============================ Coordinate & Popup Positioning ============================ */
+function getRenderMetrics() {
   const rect = canvas.getBoundingClientRect();
+  const wr = wrapper.getBoundingClientRect();
   const canvasAspect = W / H;
   const rectAspect = rect.width / rect.height;
 
@@ -1170,15 +1501,24 @@ function getCanvasCoords(e) {
     offsetX = 0;
     offsetY = (rect.height - renderH) / 2;
   }
-
-  const clientX = e.clientX - rect.left - offsetX;
-  const clientY = e.clientY - rect.top - offsetY;
-  const scale = renderW / W;
-
   return {
-    x: clientX / scale,
-    y: clientY / scale,
-    inside: clientX >= 0 && clientX <= renderW && clientY >= 0 && clientY <= renderH
+    left: (rect.left - wr.left) + offsetX,
+    top: (rect.top - wr.top) + offsetY,
+    renderW,
+    renderH,
+    scale: renderW / W
+  };
+}
+
+function getCanvasCoords(e) {
+  const m = getRenderMetrics();
+  const wr = wrapper.getBoundingClientRect();
+  const clientX = e.clientX - wr.left - m.left;
+  const clientY = e.clientY - wr.top - m.top;
+  return {
+    x: clientX / m.scale,
+    y: clientY / m.scale,
+    inside: clientX >= 0 && clientX <= m.renderW && clientY >= 0 && clientY <= m.renderH
   };
 }
 
@@ -1191,35 +1531,49 @@ function positionSpSlot() {
     spSlot.style.display = 'none';
     return;
   }
-  const rect = canvas.getBoundingClientRect();
-  const canvasAspect = W / H;
-  const rectAspect = rect.width / rect.height;
-  let renderW, renderH, offsetX, offsetY;
-  if (rectAspect > canvasAspect) {
-    renderH = rect.height;
-    renderW = renderH * canvasAspect;
-    offsetX = (rect.width - renderW) / 2;
-    offsetY = 0;
-  } else {
-    renderW = rect.width;
-    renderH = renderW / canvasAspect;
-    offsetX = 0;
-    offsetY = (rect.height - renderH) / 2;
-  }
-  const scale = renderW / W;
-
+  const m = getRenderMetrics();
   spSlot.style.display = 'block';
-  spSlot.style.left = Math.round(rect.left + offsetX + UI.lcd.x * scale) + 'px';
-  spSlot.style.top = Math.round(rect.top + offsetY + UI.lcd.y * scale) + 'px';
-  spSlot.style.width = Math.round(UI.lcd.w * scale) + 'px';
-  spSlot.style.height = Math.round(UI.lcd.h * scale) + 'px';
+  spSlot.style.left = Math.round(m.left + UI.lcd.x * m.scale) + 'px';
+  spSlot.style.top = Math.round(m.top + UI.lcd.y * m.scale) + 'px';
+  spSlot.style.width = Math.round(UI.lcd.w * m.scale) + 'px';
+  spSlot.style.height = Math.round(UI.lcd.h * m.scale) + 'px';
 }
+
+function positionRainPop() {
+  if (!S.dialOpen) return;
+  const m = getRenderMetrics();
+  const dialLeft = m.left + (UI.dialRain.cx - UI.dialRain.r) * m.scale;
+  const dialTop = m.top + (UI.dialRain.cy - UI.dialRain.r - 12) * m.scale;
+  const popW = rainPop.offsetWidth || 184;
+  const popLeft = clamp(dialLeft - 10, 8, Math.max(8, wrapper.clientWidth - popW - 8));
+  const popBottom = Math.max(12, wrapper.clientHeight - dialTop + 6);
+  rainPop.style.left = Math.round(popLeft) + 'px';
+  rainPop.style.bottom = Math.round(popBottom) + 'px';
+}
+
+function setRainPopup(open) {
+  S.dialOpen = !!open;
+  rainPop.hidden = !S.dialOpen;
+  if (S.dialOpen) positionRainPop();
+}
+
+/* ============================ Rain Pop Bar Events ============================ */
+rainPop.addEventListener('pointerdown', e => e.stopPropagation());
+rainPop.addEventListener('click', e => e.stopPropagation());
+
+rainVol.addEventListener('input', e => {
+  AudioEngine.unlock();
+  const pct = Number(e.target.value);
+  S.rain = clamp(pct / 100, 0, 1);
+  rainPct.textContent = pct + '%';
+  AudioEngine.setRain(S.rain);
+});
 
 /* ============================ Player & Mode Control ============================ */
 function setMode(mode) {
   if (S.mode === mode) return;
   AudioEngine.unlock();
-  AudioEngine.click();
+  AudioEngine.click(true);
   S.mode = mode;
 
   if (mode === 'spotify') {
@@ -1236,7 +1590,7 @@ function setMode(mode) {
 function playTrack(idx) {
   if (!localTracks.length) return;
   AudioEngine.unlock();
-  AudioEngine.click();
+  AudioEngine.click(true);
   trackIndex = ((idx % localTracks.length) + localTracks.length) % localTracks.length;
   const tr = localTracks[trackIndex];
   localAudio.src = tr.url;
@@ -1249,6 +1603,7 @@ function playTrack(idx) {
 function togglePlay() {
   AudioEngine.unlock();
   if (!localTracks.length) { fileInput.click(); return; }
+  AudioEngine.click(false);
   if (!localAudio.src) { playTrack(0); return; }
   if (localAudio.paused) {
     localAudio.play().then(() => { S.playing = true; }).catch(() => { S.playing = false; });
@@ -1261,6 +1616,7 @@ function togglePlay() {
 fileInput.addEventListener('change', e => {
   const files = Array.from(e.target.files || []);
   if (!files.length) return;
+  localTracks.forEach(t => { try { URL.revokeObjectURL(t.url); } catch (err) {} });
   localTracks = files.map(f => ({
     name: f.name.replace(/\.[^.]+$/, '').toUpperCase(),
     url: URL.createObjectURL(f)
@@ -1278,60 +1634,32 @@ localAudio.addEventListener('pause', () => { S.playing = false; });
 /* ============================ Pointer Handlers ============================ */
 canvas.addEventListener('pointerdown', e => {
   const pt = getCanvasCoords(e);
-  if (!pt.inside) return;
+  if (!pt.inside) {
+    if (S.dialOpen) setRainPopup(false);
+    return;
+  }
   AudioEngine.unlock();
 
-  // Rain dial
-  if (Math.hypot(pt.x - UI.dialRain.cx, pt.y - UI.dialRain.cy) <= UI.dialRain.r) {
+  // Rain dial toggles the intensity bar popup
+  if (Math.hypot(pt.x - UI.dialRain.cx, pt.y - UI.dialRain.cy) <= UI.dialRain.r + 3) {
     pressedBtn = 'dialRain';
-    S.rain = (S.rain + 0.25);
-    if (S.rain > 1.01) S.rain = 0;
-    AudioEngine.setRain(S.rain);
-    AudioEngine.click();
+    AudioEngine.click(false);
+    setRainPopup(!S.dialOpen);
     return;
   }
 
-  // Left buttons
-  if (isInside(pt, UI.btnLocal)) {
-    pressedBtn = 'local';
-    setMode('local');
-    return;
-  }
-  if (isInside(pt, UI.btnSpotify)) {
-    pressedBtn = 'spotify';
-    setMode('spotify');
-    return;
-  }
-  if (isInside(pt, UI.btnLoadMp3)) {
-    pressedBtn = 'loadMp3';
-    fileInput.click();
-    return;
-  }
+  // Clicking elsewhere closes the rain bar popup
+  if (S.dialOpen) setRainPopup(false);
 
-  // LCD controls
+  if (isInside(pt, UI.btnLocal)) { pressedBtn = 'local'; setMode('local'); return; }
+  if (isInside(pt, UI.btnSpotify)) { pressedBtn = 'spotify'; setMode('spotify'); return; }
+  if (isInside(pt, UI.btnLoadMp3)) { pressedBtn = 'loadMp3'; AudioEngine.click(false); fileInput.click(); return; }
+
   if (S.mode === 'local') {
-    if (isInside(pt, UI.btnCarEq)) {
-      pressedBtn = 'carEq';
-      S.carEq = !S.carEq;
-      AudioEngine.setCarEq(S.carEq);
-      AudioEngine.click();
-      return;
-    }
-    if (isInside(pt, UI.btnPrev)) {
-      pressedBtn = 'prev';
-      playTrack(trackIndex - 1);
-      return;
-    }
-    if (isInside(pt, UI.btnPlay)) {
-      pressedBtn = 'play';
-      togglePlay();
-      return;
-    }
-    if (isInside(pt, UI.btnNext)) {
-      pressedBtn = 'next';
-      playTrack(trackIndex + 1);
-      return;
-    }
+    if (isInside(pt, UI.btnCarEq)) { pressedBtn = 'carEq'; S.carEq = !S.carEq; AudioEngine.setCarEq(S.carEq); AudioEngine.click(false); return; }
+    if (isInside(pt, UI.btnPrev)) { pressedBtn = 'prev'; playTrack(trackIndex - 1); return; }
+    if (isInside(pt, UI.btnPlay)) { pressedBtn = 'play'; togglePlay(); return; }
+    if (isInside(pt, UI.btnNext)) { pressedBtn = 'next'; playTrack(trackIndex + 1); return; }
     if (isInside(pt, UI.volBar)) {
       isDraggingVol = true;
       S.vol = clamp((pt.x - UI.volBar.x) / UI.volBar.w, 0, 1);
@@ -1350,7 +1678,7 @@ window.addEventListener('pointermove', e => {
   }
   let hover = false;
   if (pt.inside) {
-    if (Math.hypot(pt.x - UI.dialRain.cx, pt.y - UI.dialRain.cy) <= UI.dialRain.r) hover = true;
+    if (Math.hypot(pt.x - UI.dialRain.cx, pt.y - UI.dialRain.cy) <= UI.dialRain.r + 3) hover = true;
     else if (isInside(pt, UI.btnLocal) || isInside(pt, UI.btnSpotify) || isInside(pt, UI.btnLoadMp3)) hover = true;
     else if (S.mode === 'local' && (isInside(pt, UI.btnCarEq) || isInside(pt, UI.btnPrev) || isInside(pt, UI.btnPlay) || isInside(pt, UI.btnNext) || isInside(pt, UI.volBar))) hover = true;
   }
@@ -1362,15 +1690,21 @@ window.addEventListener('pointerup', () => {
   isDraggingVol = false;
 });
 
-// Wiper toggle & shortcuts
 document.addEventListener('keydown', e => {
   AudioEngine.unlock();
   if (e.key === 'w' || e.key === 'W') {
+    AudioEngine.click(false);
     S.wiperMode = (S.wiperMode + 1) % 3;
     S.wiperToast = 1.8;
-  } else if (e.code === 'Space') {
+  } else if (e.key === 'Escape' && S.dialOpen) {
+    setRainPopup(false);
+  } else if (e.code === 'Space' && S.mode === 'local') {
     e.preventDefault();
-    if (S.mode === 'local') togglePlay();
+    togglePlay();
+  } else if ((e.key === 'n' || e.key === 'N') && S.mode === 'local') {
+    playTrack(trackIndex + 1);
+  } else if ((e.key === 'p' || e.key === 'P') && S.mode === 'local') {
+    playTrack(trackIndex - 1);
   }
 });
 
@@ -1379,6 +1713,7 @@ function onResize() {
   layout();
   seedScene();
   positionSpSlot();
+  positionRainPop();
 }
 window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
