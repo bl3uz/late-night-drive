@@ -10,90 +10,103 @@
     --amber:#ffb457;
     --amber-soft:#ffd7a0;
     --teal:#59e3cf;
+    --line:#33414f;
+    --text:#a3b6c7;
     --marq-dur:14s;
   }
   *{box-sizing:border-box}
-  html,body{height:100%;margin:0;background:#000;overflow:hidden}
+  html,body{width:100%;height:100%;margin:0;background:#000;overflow:hidden}
   body{
     font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;
-    color:#a3b6c7;
+    color:var(--text);
     -webkit-font-smoothing:none;
+    display:grid;
+    place-items:center;
+  }
+  #wrapper{
+    position:relative;
+    width:100vw;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#000;
   }
   #screen{
-    position:fixed;inset:0;width:100%;height:100%;display:block;
-    object-fit:contain;background:#000;z-index:0;
-    image-rendering:pixelated;image-rendering:crisp-edges;
+    width:100%;
+    height:100%;
+    display:block;
+    object-fit:contain;
+    background:#000;
+    image-rendering:pixelated;
+    image-rendering:crisp-edges;
   }
 
-  /* ---------- clickable rain dial hitbox over canvas ---------- */
+  /* ---------- Clickable Rain Dial Hitbox ---------- */
   #rainDialBtn{
-    position:fixed;z-index:22;appearance:none;-webkit-appearance:none;
+    position:absolute;z-index:22;appearance:none;-webkit-appearance:none;
     background:transparent;border:0;border-radius:50%;cursor:pointer;padding:0;
   }
   #rainDialBtn:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 
-  /* ---------- rain / audio intensity popup bar ---------- */
+  /* ---------- Rain / Audio Popup Bar ---------- */
   #rain-pop{
-    position:fixed;z-index:30;width:186px;padding:7px 9px 8px;
+    position:absolute;z-index:30;width:180px;padding:6px 8px 7px;
     background:linear-gradient(#131b24,#080c11);
     border:2px solid #354657;
     box-shadow:inset 0 0 0 1px #04070a, inset 0 1px 0 #4d6173, 0 10px 26px rgba(0,0,0,.9);
-    display:flex;flex-direction:column;gap:6px;
+    display:flex;flex-direction:column;gap:5px;
   }
   #rain-pop[hidden]{display:none !important}
   .pop-head{
     display:flex;align-items:center;justify-content:space-between;
-    font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#7fe9d6;
+    font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#7fe9d6;
   }
   .pop-head b{color:var(--amber);font-weight:400}
   .pop-bar{display:flex;align-items:center;gap:6px}
   .pop-bar input[type=range]{
-    -webkit-appearance:none;appearance:none;width:100%;height:10px;
+    -webkit-appearance:none;appearance:none;width:100%;height:8px;
     background:#040a0c;border:1px solid #2b3c48;cursor:pointer;margin:0;
     box-shadow:inset 0 0 0 1px #000;
   }
   .pop-bar input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;appearance:none;width:9px;height:14px;border:0;
-    background:linear-gradient(#ffd7a0,#e79a3c);box-shadow:0 0 7px rgba(255,170,70,.75);
-  }
-  .pop-bar input[type=range]::-moz-range-thumb{
-    width:9px;height:14px;border:0;border-radius:0;
+    -webkit-appearance:none;appearance:none;width:8px;height:12px;border:0;
     background:linear-gradient(#ffd7a0,#e79a3c);box-shadow:0 0 7px rgba(255,170,70,.75);
   }
   .pop-foot{
     display:flex;justify-content:space-between;
-    font-size:8px;letter-spacing:.10em;color:#5a7488;text-transform:uppercase;
+    font-size:7.5px;letter-spacing:.10em;color:#5a7488;text-transform:uppercase;
   }
 
-  /* ---------- embedded vintage dash stereo ---------- */
+  /* ---------- In-Dash Vintage Stereo Deck ---------- */
   #dash-stereo{
-    position:fixed;z-index:20;display:flex;align-items:stretch;gap:4px;padding:3px;
+    position:absolute;z-index:20;display:flex;align-items:stretch;gap:4px;padding:3px;
     background:linear-gradient(#121820,#080b10);
     border:2px solid #2b3845;
     box-shadow:inset 0 0 0 1px #04070a, inset 0 1px 0 #3f5061, 0 4px 16px rgba(0,0,0,.85);
   }
   .hw-col{
-    flex:0 0 60px;display:flex;flex-direction:column;justify-content:space-between;
-    gap:3px;padding:2px;background:#090d12;border:1px solid #1e2934;
+    flex:0 0 54px;display:flex;flex-direction:column;justify-content:space-between;
+    gap:2px;padding:2px;background:#090d12;border:1px solid #1e2934;
   }
   .hw-label{
-    font-size:7px;letter-spacing:.14em;color:#5d7488;
+    font-size:6.5px;letter-spacing:.14em;color:#5d7488;
     text-align:center;line-height:1.1;padding:1px 0;border-bottom:1px solid #1a242e;
   }
   .hw-btn{
     appearance:none;-webkit-appearance:none;
-    display:flex;align-items:center;gap:4px;
-    width:100%;padding:3px 4px;min-height:18px;
+    display:flex;align-items:center;gap:3px;
+    width:100%;padding:2px 3px;min-height:16px;
     border:1px solid #2f3e4d;background:linear-gradient(#1c252f,#10161c);color:#91a7ba;
-    font:inherit;font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+    font:inherit;font-size:7px;letter-spacing:.06em;text-transform:uppercase;
     cursor:pointer;text-align:left;
     box-shadow:inset 1px 1px 0 #3a4b5c, inset -1px -1px 0 #06090c;
   }
   .hw-btn:hover{color:#ffe2b8;background:linear-gradient(#24303d,#151d24)}
   .hw-btn:active{transform:translateY(1px)}
-  .hw-btn .led{width:4px;height:4px;flex:none;background:#22303c;border:1px solid #0b1117}
+  .hw-btn .led{width:3.5px;height:3.5px;flex:none;background:#22303c;border:1px solid #0b1117}
   .hw-btn.active{color:var(--teal);border-color:#266960;background:linear-gradient(#0b2c2a,#061817)}
-  .hw-btn.active .led{background:var(--teal);box-shadow:0 0 5px rgba(89,227,207,.9)}
+  .hw-btn.active .led{background:var(--teal);box-shadow:0 0 4px rgba(89,227,207,.9)}
   .hw-btn.load{
     color:var(--amber-soft);justify-content:center;
     border-color:#4b3b28;background:linear-gradient(#261e14,#14100a);
@@ -105,7 +118,7 @@
     display:flex;flex-direction:column;justify-content:center;
     background:#030a09;border:1px solid #222e3a;
     box-shadow:inset 0 0 12px rgba(89,227,207,.10), inset 0 2px 6px rgba(0,0,0,.9);
-    overflow:hidden;padding:4px 5px;
+    overflow:hidden;padding:3px 4px;
   }
   .lcd-bezel.sp-mode{padding:0}
   .lcd-bezel::after{
@@ -115,16 +128,16 @@
 
   #viewLocal{
     position:relative;z-index:1;
-    display:flex;flex-direction:column;justify-content:space-between;gap:4px;height:100%;
+    display:flex;flex-direction:column;justify-content:space-between;gap:3px;height:100%;
   }
   .lcd-top{display:flex;align-items:center;gap:4px}
   .lcd-tag{
-    font-size:8px;letter-spacing:.12em;color:var(--amber);
+    font-size:7px;letter-spacing:.1em;color:var(--amber);
     padding:1px 3px;border:1px solid #4d3820;background:#161008;flex:none;
   }
   .eq-btn{
-    appearance:none;-webkit-appearance:none;font:inherit;font-size:7px;letter-spacing:.1em;
-    padding:1px 4px;border:1px solid #244743;background:#061413;color:#557f78;
+    appearance:none;-webkit-appearance:none;font:inherit;font-size:6.5px;letter-spacing:.1em;
+    padding:1px 3px;border:1px solid #244743;background:#061413;color:#557f78;
     cursor:pointer;flex:none;text-transform:uppercase;
   }
   .eq-btn.on{
@@ -133,32 +146,29 @@
   }
   .marquee{flex:1 1 auto;min-width:40px;overflow:hidden;position:relative}
   .scroll{display:block;white-space:nowrap;will-change:transform;animation:marq var(--marq-dur) linear infinite}
-  .scroll span{display:inline-block;font-size:9px;letter-spacing:.10em;color:#7fe9d6;text-transform:uppercase}
+  .scroll span{display:inline-block;font-size:8px;letter-spacing:.08em;color:#7fe9d6;text-transform:uppercase}
   @keyframes marq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
-  .lcd-ctrl{display:flex;align-items:center;gap:4px}
+  .lcd-ctrl{display:flex;align-items:center;gap:3px}
   .cbtn{
     appearance:none;-webkit-appearance:none;border:1px solid #254844;background:#081c1a;color:#7fe9d6;
-    font:inherit;font-size:9px;line-height:1;padding:4px 6px;min-height:22px;cursor:pointer;
+    font:inherit;font-size:8px;line-height:1;padding:2px 4px;min-height:18px;cursor:pointer;
   }
   .cbtn:hover{background:#0e302c;color:#c7fff5}
   .cbtn.play{
     background:linear-gradient(#ffcf8a,#e79a3c);color:#140c03;
-    border-color:#ffd9a2;min-width:26px;font-weight:700;
+    border-color:#ffd9a2;min-width:22px;font-weight:700;
   }
   .vol{
-    margin-left:auto;display:flex;align-items:center;gap:4px;
-    font-size:8px;letter-spacing:.1em;color:#5c8f87;
+    margin-left:auto;display:flex;align-items:center;gap:3px;
+    font-size:7px;letter-spacing:.1em;color:#5c8f87;
   }
   .vol input[type=range]{
-    -webkit-appearance:none;appearance:none;width:54px;height:6px;
+    -webkit-appearance:none;appearance:none;width:44px;height:5px;
     background:#040d0c;border:1px solid #244743;cursor:pointer;margin:0;
   }
   .vol input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;appearance:none;width:6px;height:10px;border:0;background:#ffb457;
-  }
-  .vol input[type=range]::-moz-range-thumb{
-    width:6px;height:10px;border:0;border-radius:0;background:#ffb457;
+    -webkit-appearance:none;appearance:none;width:5px;height:8px;border:0;background:#ffb457;
   }
 
   .sp-wrap{
@@ -166,93 +176,67 @@
     display:flex;align-items:stretch;justify-content:center;overflow:hidden;background:#030a09;
   }
   #spMount{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
-  #spMount iframe{width:100%;height:100%;min-height:80px;max-height:152px;border:0;display:block}
-  .sp-link-btn{
-    position:absolute;top:3px;right:3px;z-index:6;
-    appearance:none;-webkit-appearance:none;
-    font:inherit;font-size:7px;letter-spacing:.1em;text-transform:uppercase;
-    padding:2px 4px;border:1px solid #2a4743;
-    background:rgba(4,12,11,.88);color:#7fe9d6;cursor:pointer;
-  }
-  .sp-link-btn:hover{border-color:#ffb457;color:#ffd7a0}
-  .sp-url-bar{
-    position:absolute;inset:0;z-index:7;
-    display:flex;flex-direction:column;justify-content:center;gap:4px;
-    padding:6px;background:rgba(4,10,12,.96);
-  }
-  .sp-url-bar label{font-size:8px;letter-spacing:.1em;color:#7fe9d6;text-transform:uppercase}
-  .sp-url-row{display:flex;gap:4px}
-  .sp-url-row input{
-    flex:1 1 auto;min-width:0;padding:4px 5px;
-    background:#020608;border:1px solid #2b4542;color:#dceef0;font:inherit;font-size:9px;
-  }
+  #spMount iframe{width:100%;height:100%;border:0;display:block}
   [hidden]{display:none !important}
 </style>
 </head>
 <body>
-<canvas id="screen" width="480" height="270" aria-label="Pixel art view from inside a right-hand drive car driving on the left lane of a 4-lane rainy road at night"></canvas>
+<div id="wrapper">
+  <canvas id="screen" width="480" height="270" aria-label="16-bit rainy night drive in cabin"></canvas>
 
-<button id="rainDialBtn" type="button" title="Click to adjust rain &amp; audio intensity" aria-label="Rain and audio intensity dial" aria-expanded="false"></button>
+  <button id="rainDialBtn" type="button" title="Click to adjust rain &amp; audio intensity" aria-label="Rain dial" aria-expanded="false"></button>
 
-<div id="rain-pop" role="dialog" aria-label="Rain and audio intensity" hidden>
-  <div class="pop-head">
-    <span>Rain / Audio</span>
-    <b id="rainPct">55%</b>
-  </div>
-  <div class="pop-bar">
-    <input id="rainVol" type="range" min="0" max="100" value="55" aria-label="Rain intensity">
-  </div>
-  <div class="pop-foot">
-    <span>Dry</span>
-    <span>Drizzle</span>
-    <span>Storm</span>
-  </div>
-</div>
-
-<div id="dash-stereo" aria-label="In-dash car stereo">
-  <div class="hw-col">
-    <div class="hw-label">CAR-DECK</div>
-    <button id="tabLocal" class="hw-btn active" type="button" title="Local MP3 files">
-      <i class="led"></i><span>LOCAL</span>
-    </button>
-    <button id="tabSpotify" class="hw-btn" type="button" title="Spotify Playlist">
-      <i class="led"></i><span>SPOTIFY</span>
-    </button>
-    <button id="loadBtn" class="hw-btn load" type="button" title="Load audio files from your device">+ MP3</button>
+  <div id="rain-pop" role="dialog" aria-label="Rain intensity" hidden>
+    <div class="pop-head">
+      <span>Rain / Audio</span>
+      <b id="rainPct">55%</b>
+    </div>
+    <div class="pop-bar">
+      <input id="rainVol" type="range" min="0" max="100" value="55" aria-label="Rain intensity">
+    </div>
+    <div class="pop-foot">
+      <span>Dry</span>
+      <span>Drizzle</span>
+      <span>Storm</span>
+    </div>
   </div>
 
-  <div class="lcd-bezel" id="lcdBezel">
-    <div id="viewLocal">
-      <div class="lcd-top">
-        <span class="lcd-tag" id="badge">IDLE</span>
-        <div class="marquee" aria-live="polite"><div class="scroll" id="marquee">
-          <span id="m1">LOAD MP3 FILES</span><span id="m2" aria-hidden="true">LOAD MP3 FILES</span>
-        </div></div>
-        <button id="carEqBtn" class="eq-btn on" type="button" title="Toggle Car Speaker Cabin EQ">CAR</button>
-      </div>
-      <div class="lcd-ctrl">
-        <button id="prevBtn" class="cbtn" type="button" title="Previous (P)" aria-label="Previous">&#9664;&#9664;</button>
-        <button id="playBtn" class="cbtn play" type="button" title="Play / Pause (Space)" aria-label="Play">&#9654;</button>
-        <button id="nextBtn" class="cbtn" type="button" title="Next (N)" aria-label="Next">&#9654;&#9654;</button>
-        <label class="vol">VOL<input id="musicVol" type="range" min="0" max="100" value="70" aria-label="Music volume"></label>
-      </div>
+  <div id="dash-stereo" aria-label="In-dash car stereo">
+    <div class="hw-col">
+      <div class="hw-label">CAR-DECK</div>
+      <button id="tabLocal" class="hw-btn active" type="button" title="Local MP3 files">
+        <i class="led"></i><span>LOCAL</span>
+      </button>
+      <button id="tabSpotify" class="hw-btn" type="button" title="Spotify Playlist">
+        <i class="led"></i><span>SPOTIFY</span>
+      </button>
+      <button id="loadBtn" class="hw-btn load" type="button" title="Load audio files from your device">+ MP3</button>
     </div>
 
-    <div id="viewSpotify" class="sp-wrap" hidden>
-      <div id="spMount"></div>
-      <button id="spLinkBtn" class="sp-link-btn" type="button" title="Change public Spotify playlist URL">LINK</button>
-      <div id="spUrlBar" class="sp-url-bar" hidden>
-        <label for="spUrlInput">Public Spotify Playlist URL</label>
-        <div class="sp-url-row">
-          <input id="spUrlInput" type="text" placeholder="https://open.spotify.com/playlist/...">
-          <button id="spUrlApply" class="cbtn play" type="button">OK</button>
-          <button id="spUrlCancel" class="cbtn" type="button">X</button>
+    <div class="lcd-bezel" id="lcdBezel">
+      <div id="viewLocal">
+        <div class="lcd-top">
+          <span class="lcd-tag" id="badge">IDLE</span>
+          <div class="marquee" aria-live="polite"><div class="scroll" id="marquee">
+            <span id="m1">LOAD MP3 FILES</span><span id="m2" aria-hidden="true">LOAD MP3 FILES</span>
+          </div></div>
+          <button id="carEqBtn" class="eq-btn on" type="button" title="Toggle Car Cabin EQ">CAR</button>
+        </div>
+        <div class="lcd-ctrl">
+          <button id="prevBtn" class="cbtn" type="button" title="Previous (P)" aria-label="Previous">&#9664;&#9664;</button>
+          <button id="playBtn" class="cbtn play" type="button" title="Play / Pause (Space)" aria-label="Play">&#9654;</button>
+          <button id="nextBtn" class="cbtn" type="button" title="Next (N)" aria-label="Next">&#9654;&#9654;</button>
+          <label class="vol">VOL<input id="musicVol" type="range" min="0" max="100" value="70" aria-label="Music volume"></label>
         </div>
       </div>
-    </div>
-  </div>
 
-  <input id="fileInput" type="file" accept="audio/*" multiple hidden>
+      <div id="viewSpotify" class="sp-wrap" hidden>
+        <div id="spMount"></div>
+      </div>
+    </div>
+
+    <input id="fileInput" type="file" accept="audio/*" multiple hidden>
+  </div>
 </div>
 
 <script>
@@ -374,7 +358,7 @@ function ellipseRing(cx, cy, rx, ry, thick, color) {
   }
 }
 
-/* ============================ Web Audio (rain + cabin + car speaker EQ) ============================ */
+/* ============================ Web Audio ============================ */
 const AudioEngine = (function () {
   let actx = null, master = null, rainBus = null, sfxBus = null, cabinBus = null;
   let lp1 = null, bp2 = null, g3 = null, scrapeGain = null;
@@ -492,7 +476,7 @@ const AudioEngine = (function () {
     scrapeGain.gain.value = 0;
     s4.connect(bpw).connect(scrapeGain).connect(sfxBus);
 
-    // Engine idle + wet tire hum inside the cabin
+    // Engine rumble and wet tire noise
     const engOsc = actx.createOscillator();
     engOsc.type = 'triangle';
     engOsc.frequency.value = 58;
@@ -927,7 +911,7 @@ function updateWipers(dt, activeDrops) {
     const lagTarget = mode > 0 ? 0.5 - 0.5 * Math.cos(2 * Math.PI * ((wiperPhase + i * 0.045) % 1)) : 0;
     const tgt = i === 0 ? target : lagTarget;
     w.prevAngle = w.angle;
-    w.pos += (tgt - w.pos) * Math.min(1, dt * (mode > 0 ? 26 : 7));
+    w.pos += (tgt - w.pos) * Math.min(1, dt * 26);
     w.angle = lerp(w.a0, w.a1, w.pos);
 
     if (mode > 0 && Math.abs(w.angle - w.prevAngle) > 0.0004) {
@@ -1748,7 +1732,6 @@ function drawMirror() {
   ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - 4, py + 10); ctx.lineTo(px + 4, py + 10); ctx.closePath(); ctx.fill();
 }
 
-// Passing oncoming headlight wash across right A-pillar & dash
 function drawPassingWash() {
   if (S.wash <= 0.02) return;
   ctx.save();
@@ -1856,15 +1839,7 @@ audioEl.volume = S.vol;
 let localTracks = [];
 let trackIndex = 0;
 let activeTab = 'local';
-let spotifyId = '6HPfW84xHDTj0skZ2q6s6h';
-
-function parseSpotifyId(raw) {
-  const s = String(raw || '').trim();
-  const m = s.match(/(?:playlist\/|playlist:)([A-Za-z0-9]+)/);
-  if (m) return m[1];
-  if (/^[A-Za-z0-9]{15,30}$/.test(s)) return s;
-  return null;
-}
+let spotifyId = '29dbwulOAfH8c8ZxvvLXs6';
 
 function mountSpotify() {
   const mount = $('spMount');
@@ -1880,10 +1855,6 @@ function mountSpotify() {
 function stopSpotify() {
   const mount = $('spMount');
   if (!mount) return;
-  const ifr = mount.querySelector('iframe');
-  if (ifr) {
-    try { ifr.contentWindow.postMessage({ command: 'pause' }, '*'); } catch (e) {}
-  }
   mount.innerHTML = '';
 }
 
@@ -1897,50 +1868,30 @@ function positionDashUI() {
   const ox = r.left + (r.width - W * scale) / 2;
   const oy = r.top + (r.height - H * scale) / 2;
 
-  if (scale < 1.25) {
-    stereo.style.left = 'calc(50% + 22px)';
-    stereo.style.transform = 'translateX(-50%)';
-    stereo.style.top = 'auto';
-    stereo.style.bottom = '8px';
-    stereo.style.width = 'min(295px, calc(100vw - 66px))';
-    stereo.style.height = '96px';
+  stereo.style.transform = 'none';
+  stereo.style.bottom = 'auto';
+  stereo.style.left = Math.round(ox + L.stereoX * scale) + 'px';
+  stereo.style.top = Math.round(oy + L.stereoY * scale) + 'px';
+  stereo.style.width = Math.round(L.stereoW * scale) + 'px';
+  stereo.style.height = Math.round(L.stereoH * scale) + 'px';
 
-    dialBtn.style.left = '8px';
-    dialBtn.style.top = 'auto';
-    dialBtn.style.bottom = '34px';
-    dialBtn.style.width = '40px';
-    dialBtn.style.height = '40px';
+  const rHit = L.dialR + 4;
+  const dLeft = Math.round(ox + (L.dialX - rHit) * scale);
+  const dTop = Math.round(oy + (L.dialY - rHit) * scale);
+  const dSize = Math.round(rHit * 2 * scale);
+  dialBtn.style.bottom = 'auto';
+  dialBtn.style.left = dLeft + 'px';
+  dialBtn.style.top = dTop + 'px';
+  dialBtn.style.width = dSize + 'px';
+  dialBtn.style.height = dSize + 'px';
 
-    pop.style.left = '8px';
-    pop.style.top = 'auto';
-    pop.style.bottom = '110px';
-  } else {
-    stereo.style.transform = 'none';
-    stereo.style.bottom = 'auto';
-    stereo.style.left = Math.round(ox + L.stereoX * scale) + 'px';
-    stereo.style.top = Math.round(oy + L.stereoY * scale) + 'px';
-    stereo.style.width = Math.round(L.stereoW * scale) + 'px';
-    stereo.style.height = Math.round(L.stereoH * scale) + 'px';
-
-    const rHit = L.dialR + 4;
-    const dLeft = Math.round(ox + (L.dialX - rHit) * scale);
-    const dTop = Math.round(oy + (L.dialY - rHit) * scale);
-    const dSize = Math.round(rHit * 2 * scale);
-    dialBtn.style.bottom = 'auto';
-    dialBtn.style.left = dLeft + 'px';
-    dialBtn.style.top = dTop + 'px';
-    dialBtn.style.width = dSize + 'px';
-    dialBtn.style.height = dSize + 'px';
-
-    const popLeft = clamp(dLeft - 10, 8, Math.max(8, window.innerWidth - 194));
-    const popBottom = Math.max(12, window.innerHeight - dTop + 8);
-    pop.style.top = 'auto';
-    pop.style.left = Math.round(popLeft) + 'px';
-    pop.style.bottom = Math.round(popBottom) + 'px';
-  }
+  const popLeft = clamp(dLeft - 10, 8, Math.max(8, window.innerWidth - 194));
+  const popBottom = Math.max(12, window.innerHeight - dTop + 8);
+  pop.style.top = 'auto';
+  pop.style.left = Math.round(popLeft) + 'px';
+  pop.style.bottom = Math.round(popBottom) + 'px';
 }
 
-/* ---------- Rain dial & popup intensity bar ---------- */
 function setRainPopup(open) {
   S.dialOpen = !!open;
   $('rain-pop').hidden = !S.dialOpen;
@@ -1967,7 +1918,6 @@ $('rainVol').addEventListener('input', e => {
   AudioEngine.setRain(S.rain);
 });
 
-/* ---------- Wiper speed cycling (W key) ---------- */
 function cycleWipers() {
   AudioEngine.unlock(audioEl);
   AudioEngine.clickSfx(false);
@@ -1975,7 +1925,6 @@ function cycleWipers() {
   S.wiperToast = 1.6;
 }
 
-/* ---------- Car EQ toggle ---------- */
 $('carEqBtn').addEventListener('click', () => {
   AudioEngine.unlock(audioEl);
   S.carEq = !S.carEq;
@@ -1984,36 +1933,6 @@ $('carEqBtn').addEventListener('click', () => {
   AudioEngine.clickSfx(false);
 });
 
-/* ---------- Spotify LINK editor ---------- */
-$('spLinkBtn').addEventListener('click', () => {
-  AudioEngine.unlock(audioEl);
-  AudioEngine.clickSfx(false);
-  $('spUrlInput').value = 'https://open.spotify.com/playlist/' + spotifyId;
-  $('spUrlBar').hidden = false;
-  $('spUrlInput').focus();
-  $('spUrlInput').select();
-});
-$('spUrlCancel').addEventListener('click', () => {
-  AudioEngine.clickSfx(false);
-  $('spUrlBar').hidden = true;
-});
-function applySpotifyUrl() {
-  const id = parseSpotifyId($('spUrlInput').value);
-  if (id) {
-    spotifyId = id;
-    stopSpotify();
-    mountSpotify();
-    AudioEngine.clickSfx(true);
-  }
-  $('spUrlBar').hidden = true;
-}
-$('spUrlApply').addEventListener('click', applySpotifyUrl);
-$('spUrlInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') applySpotifyUrl();
-  else if (e.key === 'Escape') $('spUrlBar').hidden = true;
-});
-
-/* ---------- Stereo Local + Spotify ---------- */
 function setMarquee(text) {
   const t = ' ' + text + '   +   ';
   $('m1').textContent = t;
@@ -2101,7 +2020,6 @@ function switchTab(tab) {
   if (changed) AudioEngine.clickSfx(true);
 
   if (isSp) {
-    $('spUrlBar').hidden = true;
     mountSpotify();
     if (!audioEl.paused) {
       audioEl.pause();
